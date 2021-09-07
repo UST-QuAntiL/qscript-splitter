@@ -8,6 +8,8 @@ def pre():
 
 
     # Calculate parameters
-    number_of_independent_results = 25
+    number_of_independent_results = 0
+    if (number_of_independent_results <5):
+        number_of_independent_results += 5
 
     return [number_of_independent_results]

@@ -9,7 +9,9 @@ from qiskit.ignis.mitigation.measurement import (complete_meas_cal,
                                                  MeasurementFilter)
 
 # Calculate parameters
-number_of_independent_results = 25
+number_of_independent_results = 0
+if (number_of_independent_results <5):
+    number_of_independent_results += 5
 
 for i in range(number_of_independent_results):
     # Generate a noise model for the qubits
