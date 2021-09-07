@@ -141,6 +141,7 @@ def handle_for_loops(red, first, last):
             if last.parent.parent == loop:
                 conditions.append((str(loop.iterator.value), str(loop.target.value[-1])))
                 loop.target = "range(1)"
+                loop.iterator = "somethingFancy"
                 break
     return_condition = store_loop_condition(conditions)
     return first_qc_index, last_qc_index, return_condition
@@ -176,11 +177,12 @@ def get_prov_vars(code):
     helper function
     compute all variable that a given code-snippet may provide for other parts
 
-    :param code: code-snippet to analyse
+    :param code:  redBaron instance representing the code-snippet to analyse
     :return: list of all provided variables
     """
     vars = []
     # TODO implement
+    #print(code.findAll("AssignmentNode"))
     return vars
 
 
