@@ -6,7 +6,8 @@ from qiskit.providers.aer import noise
 from qiskit import QuantumRegister, QuantumCircuit, ClassicalRegister
 def quantum(): 
 
-    for i in range(1):
+    for somethingFancy in range(1):
+        pass
     # Generate a noise model for the qubits
     noise_model = noise.NoiseModel()
     for qi in range(5):
@@ -40,5 +41,5 @@ def quantum():
     job = qiskit.execute(ghz, backend=backend, shots=1000, noise_model=noise_model)
     results = job.result()
 
-# solve the linear system
-    return []
+    # solve the linear system
+    return [noise_model,read_err,qr,meas_cals,state_labels,backend,job,cal_results,meas_fitter,cr,ghz,results]

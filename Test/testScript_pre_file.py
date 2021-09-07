@@ -10,4 +10,4 @@ def pre():
     # Calculate parameters
     number_of_independent_results = 25
 
-    return []
+    return [number_of_independent_results]

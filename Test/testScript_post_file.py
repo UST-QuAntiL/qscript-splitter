@@ -10,4 +10,4 @@ def post():
     # Results without mitigation
     raw_counts = results.get_counts()
     print("Results without mitigation:", raw_counts)
-    return []
+    return [raw_counts]
