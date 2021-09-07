@@ -6,7 +6,6 @@ from rope.refactor.extract import ExtractMethod
 from rope.base.change import ChangeSet
 from redbaron import RedBaron
 
-
 def analyze(filename):
     """
     uses an FST to analyze the given source code
@@ -61,27 +60,44 @@ def analyze(filename):
     qc_part_code = RedBaron("def quantum(): return 0")
     pre_part_code = RedBaron("def pre(): return 0")
     post_part_code = RedBaron("def post(): return 0")
+    # redBaron can only deal with inserting/appending str and converts them to nodes internally
+
+    # prepare code of pre part
+    pre_part_code[0].value = ""
+    for i in range(last_import_index +1, first_qc_index):
+        pre_part_code[0].value.append(str(red[i].copy()))
+    quantum_req = get_prov_vars(pre_part_code)
+    # add return statement with matching arguments
+    pre_part_code[0].value.append("return")
+    pre_part_code[0].value[-1].value = str(quantum_req).replace("'","")
+
 
     # prepare code of quantum part
     qc_part_code[0].value = ""
     for i in range(first_qc_index, last_qc_index + 1):
         # +1 is mandatory to include the last node due to indexing reasons
-        qc_part_code[0].value.append(red[i].copy())
+        qc_part_code[0].value.append(str(red[i].copy()))
     post_req = get_prov_vars(qc_part_code)
-    qc_part_code[0].value.append("return " + str(post_req))
-
-    # prepare code of pre part
-    pre_part_code[0].value = ""
-    for i in range(last_import_index + 1, first_qc_index):
-        pre_part_code[0].value.append(red[i].copy())
-    quantum_req = get_prov_vars(pre_part_code)
-    pre_part_code[0].value.append("return " + str(quantum_req))
+    # add return statement with matching arguments
+    qc_part_code[0].value.append("return ")
+    qc_part_code[0].value[-1].value = str(post_req).replace("'","")
+    # add arguments to dummy function, especially the loop-condition
+    quantum_req.append(condition[0])
+    for arg in quantum_req:
+        qc_part_code[0].arguments.append(arg)
 
     # prepare code of post part
     post_part_code[0].value = ""
     for i in red[last_qc_index + 1:]:
-        post_part_code[0].value.append(red[red.index(i)])
-    post_part_code[0].value.append("return " + str(get_prov_vars(post_part_code)))
+        post_part_code[0].value.append(str(red[red.index(i)]))
+    post_prov = get_prov_vars(post_part_code)
+    # add return statement with matching arguments
+    post_part_code[0].value.append("return ")
+    post_part_code[0].value[-1].value = str(post_prov).replace("'","")
+    # add arguments to dummy function
+    for arg in post_req:
+        post_part_code[0].arguments.append(arg)
+
 
     # fix for imports. This will put all imports to the new code
     for im in import_nodes:
@@ -181,9 +197,18 @@ def get_prov_vars(code):
     :return: list of all provided variables
     """
     vars = []
-    # TODO implement
-    #print(code.findAll("AssignmentNode"))
-    return vars
+
+    assignments = code.findAll("AssignmentNode")
+    for a in assignments:
+        if isinstance(a.target.value, str):
+            vars.append(a.target.value)
+        else:
+            # combined assignment e.g. x,y = f()
+            split_target = str(a.target).split(",")
+            for s in split_target:
+                vars.append(s)
+    # filter duplicates before returning
+    return list(dict.fromkeys(vars))
 
 
 def get_last_index(red, nodes):
