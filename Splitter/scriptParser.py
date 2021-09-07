@@ -20,8 +20,6 @@ def analyze(filename):
     with open(filename, "r") as source:
         code_file = source.read()
         red = RedBaron(code_file)
-    # test for read
-    # print(red.dumps())
 
     imports = {}
     import_nodes = []
@@ -66,41 +64,32 @@ def analyze(filename):
 
     # prepare code of quantum part
     qc_part_code[0].value = ""
-    for i in range(first_qc_index, last_qc_index+1):
+    for i in range(first_qc_index, last_qc_index + 1):
         # +1 is mandatory to include the last node due to indexing reasons
         qc_part_code[0].value.append(red[i].copy())
     post_req = get_prov_vars(qc_part_code)
-    qc_part_code[0].value.append("return "+str(post_req))
+    qc_part_code[0].value.append("return " + str(post_req))
 
     # prepare code of pre part
     pre_part_code[0].value = ""
-    for i in range(last_import_index+1, first_qc_index):
+    for i in range(last_import_index + 1, first_qc_index):
         pre_part_code[0].value.append(red[i].copy())
     quantum_req = get_prov_vars(pre_part_code)
-    pre_part_code[0].value.append("return "+str(quantum_req))
+    pre_part_code[0].value.append("return " + str(quantum_req))
 
     # prepare code of post part
     post_part_code[0].value = ""
-    for i in red[last_qc_index+1:]:
+    for i in red[last_qc_index + 1:]:
         post_part_code[0].value.append(red[red.index(i)])
-    post_part_code[0].value.append("return "+str(get_prov_vars(post_part_code)))
+    post_part_code[0].value.append("return " + str(get_prov_vars(post_part_code)))
 
-    """
-    for i in range(last_qc_index + 1, 100000):
-        try:
-            post_part_code.insert(i, red[i].copy())
-        except IndexError:
-            break
-    """
     # fix for imports. This will put all imports to the new code
     for im in import_nodes:
         qc_part_code.insert(0, im.copy())
         pre_part_code.insert(0, im.copy())
         post_part_code.insert(0, im.copy())
 
-
-
-    # the following works but is commented out for run time reasons
+    # the following works but may get commented out for run time reasons
     # create parts
     qc_part = Part(start_line=first_qc_index, offset=(0, 0), nodes=[], code_as_string=qc_part_code.dumps())
     pre_part = Part(start_line=0, offset=(0, 0), nodes=[], code_as_string=pre_part_code.dumps())
@@ -113,6 +102,7 @@ def analyze(filename):
     my_candidate.init_post(post_part)
 
     return "Splitting successful"
+
 
 def handle_for_loops(red, first, last):
     """
@@ -127,8 +117,6 @@ def handle_for_loops(red, first, last):
     complete_loop = False
     intersecting_loops = []
     conditions = []
-
-    # TODO adjust loop.iterator and loop.target and set meta data to generate bpmn loop
 
     # check the beginning of the quantum part
     try:
@@ -195,6 +183,7 @@ def get_prov_vars(code):
     # TODO implement
     return vars
 
+
 def get_last_index(red, nodes):
     """
     compute the highest (last) index from a given node-list
@@ -207,6 +196,7 @@ def get_last_index(red, nodes):
     for i in nodes:
         index = max(index, red.index(i))
     return index
+
 
 class Part():
     """
