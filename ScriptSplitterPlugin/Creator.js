@@ -7,7 +7,7 @@ import {createModeler} from "../../QuantME-CamundaPlugin/quantme/Utilities";
 * @param: modeler 
 * @param: metaData
 */
-function createMyShapes(metaData){
+export function createMyShapes(metaData){
   let modeler = createModeler();
   let modeling = modeler.get('modeling');
   let elementRegistry = modeler.get('elementRegistry');

@@ -18,8 +18,6 @@ module.exports = function(electronApp, menuState) {
 /**
 * create my shapes here
 * e.g. this creates a template for the moment.
-* @param: modeler 
-* @param: metaData
 */
 function test(){
   console.log("hurra")

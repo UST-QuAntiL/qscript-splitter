@@ -1,10 +1,13 @@
-import React, { Fragment, PureComponent } from 'camunda-modeler-plugin-helpers/react';
-import { Fill } from 'camunda-modeler-plugin-helpers/components';
+import React, { useState } from 'camunda-modeler-plugin-helpers/react';
+import { Modal } from 'camunda-modeler-plugin-helpers/components';
+//var react = require('camunda-modeler-plugin-helpers/react');
+//var fill = require('camunda-modeler-plugin-helpers/components');
 
-import {createMyShapes} from './Creator'
+//import {createMyShapes} from './Creator';
+var test = require("./Creator");
 
+//module.exports = class ScriptSplitterPlugin extends PureComponent {
 export default class ScriptSplitterPlugin extends PureComponent {
-
   constructor(props) {
     super(props);
   }
