@@ -1,4 +1,4 @@
-import React, { useState } from 'camunda-modeler-plugin-helpers/react';
+import React, { Fragment, PureComponent } from 'camunda-modeler-plugin-helpers/react';
 import { Modal } from 'camunda-modeler-plugin-helpers/components';
 
 
