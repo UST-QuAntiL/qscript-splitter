@@ -1,10 +1,7 @@
 import os
 from shutil import copyfile
-from rope.base.project import Project
-from rope.base import libutils
-from rope.refactor.extract import ExtractMethod
-from rope.base.change import ChangeSet
 from redbaron import RedBaron
+
 
 def analyze(filename):
     """
@@ -12,9 +9,10 @@ def analyze(filename):
     the returned information can be used to generate candidate objects
 
     :param filename: python source file to analyze
-    :return: tuple of parts (pre,quantum,post,[imports])
+    :return: Candidate object including all parts and additional information
     """
 
+    qc_lib_name = "qiskit"
     # read in code
     with open(filename, "r") as source:
         code_file = source.read()
@@ -44,17 +42,17 @@ def analyze(filename):
     tmp_nodes = red.find_all("AtomtrailersNode")
     for node in tmp_nodes:
         for v in node.value:
-            if any(lib in str(v) for lib in imports["qiskit"]):
+            if any(lib in str(v) for lib in imports[qc_lib_name]):
                 qc_nodes.append(node)
 
     first_qc_node = qc_nodes[0]
     last_qc_node = qc_nodes[-1]
-    last_import_index = get_last_index(red, import_nodes)
-    first_qc_index, last_qc_index, condition = handle_for_loops(red, first_qc_node, last_qc_node)
+    last_import_index = __get_last_index(red, import_nodes)
+    first_qc_index, last_qc_index, condition = __handle_for_loops(red, first_qc_node, last_qc_node)
 
     # debugging
-    print("first node:", first_qc_node, first_qc_index)
-    print("last node:", last_qc_node, last_qc_index)
+    # print("first node:", first_qc_node, first_qc_index)
+    # print("last node:", last_qc_node, last_qc_index)
 
     # define parts as redBaron instances
     qc_part_code = RedBaron("def quantum(): return 0")
@@ -64,23 +62,22 @@ def analyze(filename):
 
     # prepare code of pre part
     pre_part_code[0].value = ""
-    for i in range(last_import_index +1, first_qc_index):
+    for i in range(last_import_index + 1, first_qc_index):
         pre_part_code[0].value.append(str(red[i].copy()))
-    quantum_req = get_prov_vars(pre_part_code)
+    quantum_req = __get_prov_vars(pre_part_code)
     # add return statement with matching arguments
     pre_part_code[0].value.append("return")
-    pre_part_code[0].value[-1].value = str(quantum_req).replace("'","")
-
+    pre_part_code[0].value[-1].value = str(quantum_req).replace("'", "")
 
     # prepare code of quantum part
     qc_part_code[0].value = ""
     for i in range(first_qc_index, last_qc_index + 1):
         # +1 is mandatory to include the last node due to indexing reasons
         qc_part_code[0].value.append(str(red[i].copy()))
-    post_req = get_prov_vars(qc_part_code)
+    post_req = __get_prov_vars(qc_part_code)
     # add return statement with matching arguments
     qc_part_code[0].value.append("return ")
-    qc_part_code[0].value[-1].value = str(post_req).replace("'","")
+    qc_part_code[0].value[-1].value = str(post_req).replace("'", "")
     # add arguments to dummy function, especially the loop-condition
     quantum_req.append(condition[0])
     for arg in quantum_req:
@@ -90,14 +87,13 @@ def analyze(filename):
     post_part_code[0].value = ""
     for i in red[last_qc_index + 1:]:
         post_part_code[0].value.append(str(red[red.index(i)]))
-    post_prov = get_prov_vars(post_part_code)
+    post_prov = __get_prov_vars(post_part_code)
     # add return statement with matching arguments
     post_part_code[0].value.append("return ")
-    post_part_code[0].value[-1].value = str(post_prov).replace("'","")
+    post_part_code[0].value[-1].value = str(post_prov).replace("'", "")
     # add arguments to dummy function
     for arg in post_req:
         post_part_code[0].arguments.append(arg)
-
 
     # fix for imports. This will put all imports to the new code
     for im in import_nodes:
@@ -117,10 +113,10 @@ def analyze(filename):
     my_candidate.init_pre(pre_part)
     my_candidate.init_post(post_part)
 
-    return "Splitting successful"
+    return my_candidate
 
 
-def handle_for_loops(red, first, last):
+def __handle_for_loops(red, first, last):
     """
     find all loops that make use of quantum nodes
 
@@ -157,13 +153,13 @@ def handle_for_loops(red, first, last):
             if last.parent.parent == loop:
                 conditions.append((str(loop.iterator.value), str(loop.target.value[-1])))
                 loop.target = "range(1)"
-                loop.iterator = "somethingFancy"
+                loop.iterator = "loop_killer_dummy"
                 break
-    return_condition = store_loop_condition(conditions)
+    return_condition = __store_loop_condition(conditions)
     return first_qc_index, last_qc_index, return_condition
 
 
-def store_loop_condition(conditions):
+def __store_loop_condition(conditions):
     """
     save the loop conditions
 
@@ -175,7 +171,7 @@ def store_loop_condition(conditions):
     return conditions[0]
 
 
-def get_req_vars(code):
+def __get_req_vars(code):
     """
     compute all variable that a given code-snippet may need
 
@@ -188,7 +184,7 @@ def get_req_vars(code):
     return vars
 
 
-def get_prov_vars(code):
+def __get_prov_vars(code):
     """
     helper function
     compute all variable that a given code-snippet may provide for other parts
@@ -211,7 +207,7 @@ def get_prov_vars(code):
     return list(dict.fromkeys(vars))
 
 
-def get_last_index(red, nodes):
+def __get_last_index(red, nodes):
     """
     compute the highest (last) index from a given node-list
 
@@ -253,19 +249,8 @@ class Candidate:
         self.pre_part = Part()
         self.quantum_part = Part()
         self.post_part = Part()
-
         self.loop_condition = ()
-
         self.filename = filename
-        # project needs the directory
-        self.project = Project(filename[:filename.rfind("\\")])
-        self.resource_original_name = filename
-        self.resource_pre_name, self.resource_quantum_name, self.resource_post_name, self.output_file_name = self.init_files(
-            filename)
-
-        self.resource_original = libutils.path_to_resource(self.project, self.resource_original_name)
-        self.output_file = libutils.path_to_resource(self.project, self.output_file_name)
-        self.imports = []
         self.dst_pre, self.dst_quantum, self.dst_post, self.dst_out = self.init_files(filename)
 
     def init_files(self, filename):
@@ -303,17 +288,6 @@ class Candidate:
         # write quantum part to dst-file
         with open(self.dst_pre, "w") as out:
             out.writelines(part.code_as_string)
-        """
-        # old
-        if (part.offset[0] > part.offset[1]):
-            # there is no pre part
-            return
-        extractor = ExtractMethod(self.project, self.output_file, part.offset[0], part.offset[1])
-        changes = extractor.get_changes('pre_part')
-        self.pre_part.changes = changes
-        self.project.validate()
-        self.project.do(changes)
-        """
 
     def init_quantum(self, part):
         """
@@ -326,15 +300,6 @@ class Candidate:
         # write quantum part to dst-file
         with open(self.dst_quantum, "w") as out:
             out.writelines(part.code_as_string)
-        """
-        #old:
-        extractor = ExtractMethod(self.project, self.output_file, part.offset[0], part.offset[1])
-        changes = extractor.get_changes('quantum_part')
-        self.quantum_part.changes = changes
-        
-        # self.project.validate()
-        # self.project.do(changes)
-        """
 
     def init_post(self, part):
         """
@@ -347,14 +312,6 @@ class Candidate:
         # write quantum part to dst-file
         with open(self.dst_post, "w") as out:
             out.writelines(part.code_as_string)
-        """
-        # old
-        extractor = ExtractMethod(self.project, self.output_file, part.offset[0], part.offset[1])
-        changes = extractor.get_changes('post_part')
-        self.post_part.changes = changes
-        self.project.validate()
-        self.project.do(changes)
-        """
 
     def __do_backup(self):
         """
@@ -366,7 +323,4 @@ class Candidate:
         copyfile(src, dst)
 
     def get_file_names(self):
-        return self.resource_pre_name, self.resource_quantum_name, self.resource_post_name, self.output_file_name
-
-    def set_imports(self, imports):
-        self.imports = imports
+        return self.dst_pre, self.dst_quantum, self.dst_post, self.dst_out
