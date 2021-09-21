@@ -6,7 +6,7 @@ from qiskit.providers.aer import noise
 from qiskit import QuantumRegister, QuantumCircuit, ClassicalRegister
 def quantum(number_of_independent_results, i, ): 
 
-    for loop_killer_dummy in range(1):
+    for _loop_killer_dummy in range(1):
         # Generate a noise model for the qubits
         noise_model = noise.NoiseModel()
         for qi in range(5):

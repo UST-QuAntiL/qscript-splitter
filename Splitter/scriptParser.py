@@ -153,7 +153,7 @@ def __handle_for_loops(red, first, last):
             if last.parent.parent == loop:
                 conditions.append((str(loop.iterator.value), str(loop.target.value[-1])))
                 loop.target = "range(1)"
-                loop.iterator = "loop_killer_dummy"
+                loop.iterator = "_loop_killer_dummy"
                 break
     return_condition = __store_loop_condition(conditions)
     return first_qc_index, last_qc_index, return_condition
