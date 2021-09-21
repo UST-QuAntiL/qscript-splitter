@@ -1,5 +1,4 @@
 import threading
-import os
 import requests
 import Test.testScript_pre_file as prePart
 
@@ -33,7 +32,6 @@ def poll():
     print(response)
     if response.status_code == 200:
         for externalTask in response.json():
-
             variables = externalTask.get('variables')
 
             argument_vars = variables
@@ -55,8 +53,9 @@ def poll():
     threading.Timer(20, poll).start()
 
 
-pollingEndpoint = os.environ['CAMUNDA_ENDPOINT'] + '/external-task'
-# pollingEndpoint = "http://localhost:8888/external-task"
-topic = os.environ['CAMUNDA_TOPIC']
-# topic = "http://localhost:8888"
+# maybe get the endpoint from a parameter
+
+pollingEndpoint = "http://localhost:8080/engine-rest"
+# generierter ranodm string
+topic = "RandomTopic12345"
 poll()
