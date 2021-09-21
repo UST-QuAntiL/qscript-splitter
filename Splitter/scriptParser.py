@@ -28,7 +28,7 @@ def analyze(filename):
         import_nodes.append(i)
         for j in i.targets:
             # brackets are misleading here and must be skipped
-            if not ('(' in j.value or (')') in j.value):
+            if not ('(' in j.value or ')' in j.value):
                 try:
                     imports[i.name.value].append(j.value)
                 except KeyError:
