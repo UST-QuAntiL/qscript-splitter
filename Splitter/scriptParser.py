@@ -12,7 +12,9 @@ def analyze(filename):
     :return: Candidate object including all parts and additional information
     """
 
-    qc_lib_name = "qiskit"
+    # experts can use append to add new libraries to the quantum_set
+    quantum_set = ["qiskit"]
+
     # read in code
     with open(filename, "r") as source:
         code_file = source.read()
@@ -37,16 +39,27 @@ def analyze(filename):
     tmp_nodes = red.find_all("ImportNode")
     for i in tmp_nodes:
         import_nodes.append(i)
+        if not ('(' in i.value or ')' in i.value):
+            # add the top-level lib itself or add some sub-lib to the top-level lib
+            try:
+                imports[i.name.value].append(str(i.value[0].value[-1]))
+            except KeyError:
+                imports[i.name.value] = [str(i.value[0].value[-1])]
+
+    # remove possible dangerous character-entries
+    for qc_lib_name in quantum_set:
+        # this may be refined in the future
+        imports[qc_lib_name].remove("*")
 
     # find qc nodes in calls (those are stored in AtomtrailersNodes)
     tmp_nodes = red.find_all("AtomtrailersNode")
     for node in tmp_nodes:
         for v in node.value:
-            if any(lib in str(v) for lib in imports[qc_lib_name]):
+            if any(lib in str(v) for qc_lib_name in quantum_set for lib in imports[qc_lib_name]):
                 qc_nodes.append(node)
-
-    first_qc_node = qc_nodes[0]
-    last_qc_node = qc_nodes[-1]
+    # the analysis must not use internal nodes
+    first_qc_node = __find_topLevel_node(qc_nodes[0])
+    last_qc_node = __find_topLevel_node(qc_nodes[-1])
     last_import_index = __get_last_index(red, import_nodes)
     first_qc_index, last_qc_index, condition = __handle_for_loops(red, first_qc_node, last_qc_node)
 
@@ -75,6 +88,7 @@ def analyze(filename):
         # +1 is mandatory to include the last node due to indexing reasons
         qc_part_code[0].value.append(str(red[i].copy()))
     post_req = __get_prov_vars(qc_part_code)
+    post_req.extend(__get_prov_vars(pre_part_code))
     # add return statement with matching arguments
     qc_part_code[0].value.append("return ")
     qc_part_code[0].value[-1].value = str(post_req).replace("'", "")
@@ -116,6 +130,21 @@ def analyze(filename):
     return my_candidate
 
 
+def __find_topLevel_node(node):
+    """
+    Find the top-level node which holds the given node.
+    This will use the parent relationship between nodes in the RedBaron tree.
+    If the node is a top-level node itself, the node is returned.
+
+    :param node: node to check
+    :return: the highest possible parent of the given node
+    """
+    if isinstance(node.parent, RedBaron):
+        return node
+    else:
+        return __find_topLevel_node(node.parent)
+
+
 def __handle_for_loops(red, first, last):
     """
     find all loops that make use of quantum nodes
@@ -129,6 +158,11 @@ def __handle_for_loops(red, first, last):
     complete_loop = False
     intersecting_loops = []
     conditions = []
+    # if there is no loop, this operation has to return immediately
+    if not loop_nodes:
+        conditions.append("NoLoopFound")
+        conditions.append("False")
+        return red.index(first), red.index(last), conditions
 
     # check the beginning of the quantum part
     try:
@@ -308,7 +342,7 @@ class Candidate:
         Additional information will be stored in the part object.
         :param part
         """
-        self.pre_part = part
+        self.post_part = part
         # write quantum part to dst-file
         with open(self.dst_post, "w") as out:
             out.writelines(part.code_as_string)
