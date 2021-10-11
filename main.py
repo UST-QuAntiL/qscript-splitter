@@ -9,7 +9,8 @@ app = Flask(__name__)
 
 @app.route('/')
 def hello():
-    return "TEST"
+    # this is only used to check if the api is reachable at all
+    return "Hello world!"
 
 
 @app.route('/scriptSplitter', methods=['POST'])
@@ -32,7 +33,7 @@ def createMetaFromCandidate(candidate):
     :param candidate: the data to convert, usually this is a Candidate Object
     :return: json file
     """
+    # use get_loop_condition() to abstract from internal extraction
     extracted = {"PreStart": candidate.pre_part.start_line, "QuantumStart": candidate.quantum_part.start_line, "PostStart": candidate.post_part.start_line,
-                 "LoopConditions": candidate.loop_condition}
-
+                 "LoopConditions": candidate.get_loop_condition()}
     return json.dumps(extracted)

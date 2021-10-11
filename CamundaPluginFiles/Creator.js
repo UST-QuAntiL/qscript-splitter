@@ -16,17 +16,23 @@ import { getRootProcess } from 'client/src/app/quantme/utilities/Utilities';
 * @param modeler the currently active modeler from camunda
 * @param props for debugging only
 **/
-export function buildWorkflow(fileName, modeler, props) {
+export async function buildWorkflow(fileName, modeler, props) {
   // call the scriptSplitter
-  var metadata = callScriptSplitter(fileName);
+  // url may be given via a config modal entry
+  var url = 'http://127.0.0.1:5000/scriptSplitter';
+  var metaData;
+  const data = { 'source-file': fileName, 'dada': 'dada' };
+
+  var metaData = await callScriptSplitter(url, fileName);
   var loopBo = createTemplate(modeler);
-  createConditionExpression(modeler, loopBo, metadata);
+  createConditionExpression(modeler, loopBo, metaData);
   // start polling agents manually...
 
+  let message = 'Loop-Condition found: ' + metaData.LoopConditions + '----> polling agents must be started manually!';
   props.displayNotification({
     type:'info',
-    title: 'Displaying Meta Data',
-    content: metadata,
+    title: 'Script Splitter Info',
+    content: message,
     duration: 10000
     });
 }
@@ -108,8 +114,7 @@ function createConditionExpression(modeler, quantumLoopConnectorBo, metaData){
   // TODO implement
   let elementFactory = modeler.get('bpmnFactory');
   let loopCondition = elementFactory.create('bpmn:FormalExpression');
-  const obj = JSON.parse(metaData);
-  var tmpCondition = obj.LoopConditions[1];
+  var tmpCondition = metaData.LoopConditions;
 
   loopCondition.body = tmpCondition;
   quantumLoopConnectorBo.conditionExpression = loopCondition;
@@ -120,41 +125,34 @@ function createConditionExpression(modeler, quantumLoopConnectorBo, metaData){
 */
 function getTopics() {
   // TODO randomize topic-names
-  var topics = ["RandomPre", "RandomQuantum", "RandomPost"];
+  // simple radnom string
+  const random = Math.random().toString(16).substr(2, 12);
+
+  var topics = ["RandomPreTopic"+random.substr(0,4), "RandomQuantumTopic"+random.substr(5,8), "RandomPostTopic"+random.substr(9,12)];
 
   return topics;
 }
 
 /**
 * call the Script Splitting Algorithm over the local flask app
+*@param url the URL of the script splitter
 *@param fileName the name of the file which contains the source-code
 **/
-function callScriptSplitter(fileName){
+async function callScriptSplitter(url, fileName){
 
-  var url = 'http://127.0.0.1:5000/scriptSplitter';
   var metaData;
   const data = { 'source-file': fileName, 'dada': 'dada' };
 
-  fetch(url, {
+  await fetch(url, {
     method: 'POST', // or 'PUT'
     headers: {
       'Content-Type': 'application/json',
     },
     body:JSON.stringify({sourceFile: fileName})
     })
-    .then((resp) => resp.json())
-    .then(function(data) {
-      let res = data.results;
-      metaData = res;
-    });
+    .then(response =>response.json())
+    .then(data => {metaData = data});
 
-  //metaData = "TEST";
-  metaData = JSON.stringify({
-    PreStart: 12,
-    QuantumStart: 26,
-    PostStart: 87,
-    LoopConditions: ['Nope','False']
-  })
   return metaData;
 }
 

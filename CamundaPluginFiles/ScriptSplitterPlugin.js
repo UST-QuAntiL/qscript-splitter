@@ -44,7 +44,7 @@ export default class ScriptSplitterPlugin extends PureComponent {
     return (<Fragment>
       <Fill slot="toolbar">
         <button type="button" className="src-app-primitives-Button__Button--3Ffn0" title="Start Splitting"
-          onClick= {() => this.startSplitting('C:/Users/tjehr/Uni/Masterarbeit/Code/GitHub/qscript-splitter-neu/Example/testScriptQHED.py')}>
+          onClick= {() => this.startSplitting()}>
           <span className="workflow-transformation"><span className="indent">Execute ScriptSplitter</span></span>
         </button>
       </Fill>
@@ -53,10 +53,9 @@ export default class ScriptSplitterPlugin extends PureComponent {
 
 
   /**
-  * start the algorithm
-  * @param fileName the source-file to split
+  * start the generation process
   */
-  startSplitting(fileName) {
+  startSplitting() {
     var startMessage = 'Start the Splitting Algorithm.'
     this.props.displayNotification({
       type:'info',
@@ -64,9 +63,8 @@ export default class ScriptSplitterPlugin extends PureComponent {
       content: startMessage,
       duration: 10000
       });
-      // TODO call the ScriptSplitter, this will return meta_data
-      // create template and save topic names
+      // TODO get this from user-input
+      var fileName = 'C:/Users/tjehr/Uni/Masterarbeit/Code/GitHub/qscript-splitter-neu/Example/exampleScript.py';
       buildWorkflow(fileName, this.modeler, this.props);
-      // start polling agents with topics as argument
   }
 }

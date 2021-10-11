@@ -294,15 +294,11 @@ class Candidate:
     def init_files(self):
         """
         Initialize (create) dummy-files that may be used as output as well
+
         :param filename: the original filename
         :return: names (str,str,str,str) of the new files
         """
-        """
-        dst_pre = filename[:filename.rfind(".py")] + "_pre_file.py"
-        dst_quantum = filename[:filename.rfind(".py")] + "_quantum_file.py"
-        dst_post = filename[:filename.rfind(".py")] + "_post_file.py"
-        dst_out = filename[:filename.rfind(".py")] + "_out.py"
-        """
+
         dst_pre = str(Path.cwd().resolve()) + '/Example' + '/prePart.py'
         dst_quantum = str(Path.cwd().resolve()) + '/Example' + '/quantumPart.py'
         dst_post = str(Path.cwd().resolve()) + '/Example' + '/postPart.py'
@@ -363,3 +359,14 @@ class Candidate:
 
     def get_file_names(self):
         return self.dst_pre, self.dst_quantum, self.dst_post, self.dst_out
+
+    def get_loop_condition(self):
+        target = self.loop_condition[0]
+        value = self.loop_condition[1]
+        # currently only this simple case works fine
+        simple_case = True
+        condition = ""
+        if simple_case:
+            condition = target + " < " + value
+        # needs to be extended
+        return condition
