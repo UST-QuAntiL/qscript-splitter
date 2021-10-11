@@ -1,7 +1,7 @@
 import sys
 import threading
 import requests
-import exampleScript_pre_file as prePart
+import prePart
 
 
 def send_error(error_code, external_task_id):

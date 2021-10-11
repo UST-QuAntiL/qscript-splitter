@@ -1,6 +1,7 @@
 import os
+from pathlib import Path
 from shutil import copyfile
-from redbaron import RedBaron
+from redbaron import RedBaron, CodeBlockNode
 
 
 def analyze(filename):
@@ -49,7 +50,8 @@ def analyze(filename):
     # remove possible dangerous character-entries
     for qc_lib_name in quantum_set:
         # this may be refined in the future
-        imports[qc_lib_name].remove("*")
+        while "*" in imports[qc_lib_name] :
+            imports[qc_lib_name].remove("*")
 
     # find qc nodes in calls (those are stored in AtomtrailersNodes)
     tmp_nodes = red.find_all("AtomtrailersNode")
@@ -58,8 +60,8 @@ def analyze(filename):
             if any(lib in str(v) for qc_lib_name in quantum_set for lib in imports[qc_lib_name]):
                 qc_nodes.append(node)
     # the analysis must not use internal nodes
-    first_qc_node = __find_topLevel_node(qc_nodes[0])
-    last_qc_node = __find_topLevel_node(qc_nodes[-1])
+    first_qc_node = qc_nodes[0]
+    last_qc_node = qc_nodes[-1]
     last_import_index = __get_last_index(red, import_nodes)
     first_qc_index, last_qc_index, condition = __handle_for_loops(red, first_qc_node, last_qc_node)
 
@@ -139,7 +141,7 @@ def __find_topLevel_node(node):
     :param node: node to check
     :return: the highest possible parent of the given node
     """
-    if isinstance(node.parent, RedBaron):
+    if isinstance(node.parent, RedBaron) or isinstance(node.parent, CodeBlockNode):
         return node
     else:
         return __find_topLevel_node(node.parent)
@@ -162,11 +164,12 @@ def __handle_for_loops(red, first, last):
     if not loop_nodes:
         conditions.append("NoLoopFound")
         conditions.append("False")
-        return red.index(first), red.index(last), conditions
+        return red.index(__find_topLevel_node(first)), red.index(__find_topLevel_node(last)), conditions
 
     # check the beginning of the quantum part
     try:
         first_qc_index = red.index(first.parent)
+        print(first)
     except ValueError:
         # loop begins before the quantum part
         # use loop-node as first node
@@ -187,7 +190,7 @@ def __handle_for_loops(red, first, last):
             if last.parent.parent == loop:
                 conditions.append((str(loop.iterator.value), str(loop.target.value[-1])))
                 loop.target = "range(1)"
-                loop.iterator = "_loop_killer_dummy"
+                loop.iterator = "_loop_dummy"
                 break
     return_condition = __store_loop_condition(conditions)
     return first_qc_index, last_qc_index, return_condition
@@ -202,6 +205,7 @@ def __store_loop_condition(conditions):
     """
     if not conditions:
         return ()
+
     return conditions[0]
 
 
@@ -285,22 +289,24 @@ class Candidate:
         self.post_part = Part()
         self.loop_condition = ()
         self.filename = filename
-        self.dst_pre, self.dst_quantum, self.dst_post, self.dst_out = self.init_files(filename)
+        self.dst_pre, self.dst_quantum, self.dst_post = self.init_files()
 
-    def init_files(self, filename):
+    def init_files(self):
         """
         Initialize (create) dummy-files that may be used as output as well
         :param filename: the original filename
         :return: names (str,str,str,str) of the new files
         """
-        src = filename
+        """
         dst_pre = filename[:filename.rfind(".py")] + "_pre_file.py"
         dst_quantum = filename[:filename.rfind(".py")] + "_quantum_file.py"
         dst_post = filename[:filename.rfind(".py")] + "_post_file.py"
         dst_out = filename[:filename.rfind(".py")] + "_out.py"
+        """
+        dst_pre = str(Path.cwd().resolve()) + '/Example' + '/prePart.py'
+        dst_quantum = str(Path.cwd().resolve()) + '/Example' + '/quantumPart.py'
+        dst_post = str(Path.cwd().resolve()) + '/Example' + '/postPart.py'
         # clear the files if they exist; otherwise surprising things will happen...
-        if os.path.exists(dst_out):
-            os.remove(dst_out)
         # create files and copy content to output-file
         empty_pre = open(dst_pre, "w")
         empty_pre.close()
@@ -308,8 +314,7 @@ class Candidate:
         empty_quantum.close()
         empty_post = open(dst_post, "w")
         empty_post.close()
-        copyfile(src, dst_out)
-        return dst_pre, dst_quantum, dst_post, dst_out
+        return dst_pre, dst_quantum, dst_post
 
     def init_pre(self, part):
         """
