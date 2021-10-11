@@ -1,7 +1,7 @@
 import sys
 import threading
 import requests
-import testScriptQHED_pre_file as prePart
+import exampleScript_pre_file as prePart
 
 
 def send_error(error_code, external_task_id):

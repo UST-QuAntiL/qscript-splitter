@@ -1,7 +1,7 @@
 import sys
 import threading
 import requests
-import testScriptQHED_quantum_file as quantumPart
+import exampleScript_quantum_file as quantumPart
 
 
 def send_error(error_code, external_task_id):
