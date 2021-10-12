@@ -56,15 +56,27 @@ export default class ScriptSplitterPlugin extends PureComponent {
   * start the generation process
   */
   startSplitting() {
-    var startMessage = 'Start the Splitting Algorithm.'
+    var startMessage = 'Start the Splitting Algorithm.';
     this.props.displayNotification({
       type:'info',
       title: 'ScriptSplitter',
       content: startMessage,
       duration: 10000
       });
-      // TODO get this from user-input
-      var fileName = 'C:/Users/tjehr/Uni/Masterarbeit/Code/GitHub/qscript-splitter-neu/Example/exampleScript.py';
-      buildWorkflow(fileName, this.modeler, this.props);
+      // input from the user must be implemented
+      var input = this.getInput();
+
+      buildWorkflow(input[0], this.modeler, this.props, input[1]);
+  }
+
+  /**
+  * get the URL and source-file-name from the user
+  **/
+  getInput(){
+    // get this from user-input in the future
+    // url may be given via a config modal entry
+    var fileName = 'C:/Users/tjehr/Uni/Masterarbeit/Code/GitHub/qscript-splitter-neu/Example/exampleScript.py';
+    var url = 'http://127.0.0.1:5000/scriptSplitter';
+    return [fileName, url];
   }
 }

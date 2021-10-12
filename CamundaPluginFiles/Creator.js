@@ -16,28 +16,29 @@ import { getRootProcess } from 'client/src/app/quantme/utilities/Utilities';
 * @param modeler the currently active modeler from camunda
 * @param props for debugging only
 **/
-export async function buildWorkflow(fileName, modeler, props) {
+export async function buildWorkflow(fileName, modeler, props, url) {
   // call the scriptSplitter
-  // url may be given via a config modal entry
-  var url = 'http://127.0.0.1:5000/scriptSplitter';
-  var metaData;
-  const data = { 'source-file': fileName, 'dada': 'dada' };
-
   var metaData = await callScriptSplitter(url, fileName);
   var loopBo = createTemplate(modeler);
-  createConditionExpression(modeler, loopBo, metaData);
-  // start polling agents manually...
-
-  let message = 'Loop-Condition found: ' + metaData.LoopConditions + '----> polling agents must be started manually!';
+  adjustLoopCondition(modeler, loopBo, metaData);
+  // now start polling agents manually...
+  // display some infos
+  let metaMessage = 'Loop-Condition found: ' + metaData.LoopConditions;
+  let pollingAgentMessage = 'Polling-Agents must be set up manually!';
   props.displayNotification({
     type:'info',
-    title: 'Script Splitter Info',
-    content: message,
-    duration: 10000
+    title: 'Script Splitter: Meta-Info',
+    content: metaMessage,
+    duration: 20000
     });
+  props.displayNotification({
+    type:'info',
+    title: 'Script Splitter: Warning',
+    content: pollingAgentMessage,
+    duration: 20000
+    });
+
 }
-
-
 
 /**
 * create my shapes here
@@ -110,12 +111,11 @@ export function createTemplate(modeler) {
 *@param quantumLoopConnectorBo BO holding the loop-condition
 *@param metaData the meta-data retrieved from scriptSplitting
 */
-function createConditionExpression(modeler, quantumLoopConnectorBo, metaData){
-  // TODO implement
+function adjustLoopCondition(modeler, quantumLoopConnectorBo, metaData){
+  // this currently sets the expression exactly as in the given metaData
   let elementFactory = modeler.get('bpmnFactory');
   let loopCondition = elementFactory.create('bpmn:FormalExpression');
   var tmpCondition = metaData.LoopConditions;
-
   loopCondition.body = tmpCondition;
   quantumLoopConnectorBo.conditionExpression = loopCondition;
 }
@@ -124,7 +124,7 @@ function createConditionExpression(modeler, quantumLoopConnectorBo, metaData){
 * generate random names for topics
 */
 function getTopics() {
-  // TODO randomize topic-names
+  // randomize the topic-names in the future
   // simple radnom string
   const random = Math.random().toString(16).substr(2, 12);
 
@@ -144,14 +144,17 @@ async function callScriptSplitter(url, fileName){
   const data = { 'source-file': fileName, 'dada': 'dada' };
 
   await fetch(url, {
-    method: 'POST', // or 'PUT'
+    method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     body:JSON.stringify({sourceFile: fileName})
     })
     .then(response =>response.json())
-    .then(data => {metaData = data});
+    .then(data => {
+      metaData = data })
+    .catch((error) => {
+      console.error('Error:', error) });
 
   return metaData;
 }
