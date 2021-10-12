@@ -6,7 +6,7 @@ import quantumPart
 
 def send_error(error_code, external_task_id):
     body = {
-        "workerId": "PreprocessingPollingAgent",
+        "workerId": "QuantumPollingAgent",
         "errorCode": error_code
     }
     response = requests.post(pollingEndpoint + '/' + external_task_id + '/bpmnError', json=body)
