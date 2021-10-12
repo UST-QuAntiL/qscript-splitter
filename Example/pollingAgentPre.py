@@ -30,26 +30,28 @@ def poll():
     }
 
     response = requests.post(pollingEndpoint + '/fetchAndLock', json=body)
-    print(response)
+    #print(response)
     if response.status_code == 200:
         for externalTask in response.json():
             variables = externalTask.get('variables')
+            values = []
+            for var in variables.values():
+                values.append(var["value"])
 
-            argument_vars = variables
-            print('Retrieved Arguments: ' + str(argument_vars))
             # call the wrapper function of the pre part
-            result = prePart.pre()
-            # provided variables
-            prov_vars = result
+            result = prePart.pre(*values)
 
-            print('Preprocessing completed, output: ' + str(prov_vars))
+            # provided variables
+            prov_variables = dict()
+            for var in result:
+                prov_variables[var] = {"value": var}
+
             body = {
                 "workerId": "PreprocessingPollingAgent",
-                "variables":
-                    {"result": {"value": str(prov_vars), "type": "String"}}
+                "variables": prov_variables
             }
             response = requests.post(pollingEndpoint + '/' + externalTask.get('id') + '/complete', json=body)
-            print(response.status_code)
+            #print(response.status_code)
 
     threading.Timer(20, poll).start()
 
