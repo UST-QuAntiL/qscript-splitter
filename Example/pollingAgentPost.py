@@ -21,7 +21,7 @@ def poll():
     print('Polling for new external tasks at the Camunda engine with URL: ', pollingEndpoint)
 
     body = {
-        "workerId": "PreprocessingPollingAgent",
+        "workerId": "PostprocessingPollingAgent",
         "maxTasks": 1,
         "topics":
             [{"topicName": topic,
