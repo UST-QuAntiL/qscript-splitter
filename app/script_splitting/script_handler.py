@@ -21,7 +21,9 @@ from app import app
 from redbaron import RedBaron
 from app.script_splitting.labeler import split_local_function
 import json
+import logging
 
+logging.basicConfig(filename='logger.log', encoding='utf-8', level=logging.DEBUG)
 
 def split_qc_script(script):
     app.logger.info('Starting script splitting algorithm...')
@@ -31,10 +33,10 @@ def split_qc_script(script):
         knowledge_base_json = json.load(knowledge_base)
     white_list = knowledge_base_json['white_list']
     black_list = knowledge_base_json['black_list']
-    print('Number of white list rules: ', len(white_list))
-    print('Number of black list rules: ', len(black_list))
+    logging.debug('Number of white list rules: %s' % len(white_list))
+    logging.debug('Number of black list rules: %s' % len(black_list))
 
-    # RedBaron object containing all information about the hybrid program to generate
+    # RedBaron object containing all information about the script to split
     with open(script, "r") as source_code:
         qc_script_baron = RedBaron(source_code.read())
 
@@ -42,13 +44,13 @@ def split_qc_script(script):
     function_invocation_nodes = qc_script_baron.find_all('atomtrailers',
                                                          value=lambda atomtrailer_node_value: len(atomtrailer_node_value) >= 2
                                                          and atomtrailer_node_value[1].type == 'call')
-    print('Found %d function invocations!' % len(function_invocation_nodes))
+    logging.debug('Found %d function invocations!' % len(function_invocation_nodes))
 
     # extract names of invoked functions
     invoked_function_names = []
     for function_invocation_node in function_invocation_nodes:
         invoked_function_names.append(function_invocation_node[0].value)
-    print('Invoked functions: ', invoked_function_names)
+    logging.debug('Invoked functions: %s' % invoked_function_names)
 
     # get all def nodes in the script
     def_nodes = qc_script_baron.find_all('def', name=lambda name: name in invoked_function_names)
@@ -59,7 +61,5 @@ def split_qc_script(script):
     label_map = {}
     for def_node in def_nodes:
         label_map = split_local_function(qc_script_baron, def_node, white_list, black_list, label_map, [])
-        print('Retrieved label %s for method with name: %s' % (label_map[def_node.name], def_node.name))
+        logging.debug('Retrieved label %s for method with name: %s' % (label_map[def_node.name], def_node.name))
 
-
-    print('##############################')

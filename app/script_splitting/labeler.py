@@ -20,19 +20,19 @@
 from app import app
 from app.script_splitting.Labels import Labels
 import numpy as np
-
+import logging
 
 def split_local_function(root_baron, method_baron, white_list, black_list, label_map, quantum_objects):
-    print('Splitting method with name: %s' % method_baron.name)
-    print('Already labeled functions: ', label_map)
-    print('Method has %d lines of code: ' % len(method_baron.value))
+    logging.info('Splitting method with name: %s' % method_baron.name)
+    logging.debug('Already labeled functions: %s' % label_map)
+    logging.debug('Method has %d lines of code: ' % len(method_baron.value))
 
     # label all lines within the current function
     line_labels = []
     for line in method_baron.value:
         label, quantum_objects = label_code_line(root_baron, line, white_list, black_list, quantum_objects, label_map)
         line_labels.append(label)
-    line_labels = np.array(line_labels, dtype = object)
+    line_labels = np.array(line_labels, dtype=object)
     quantum_label_indices = np.where(line_labels == Labels.QUANTUM)[0]
 
     # splitting labels based on code analysis and threshold
@@ -54,32 +54,31 @@ def split_local_function(root_baron, method_baron, white_list, black_list, label
 
     # relabel if distance between previous and current quantum index is larger than threshold
     for current_quantum_index in quantum_label_indices[1:len(quantum_label_indices)]:
-        print('Current quantum index: ', current_quantum_index)
-        print('Previous quantum index: ', previous_quantum_index)
+        logging.debug('Current quantum index: %s' % current_quantum_index)
+        logging.debug('Previous quantum index: %s' % previous_quantum_index)
 
         # check if distance between previous and current quantum index is larger than threshold
         if current_quantum_index - previous_quantum_index <= app.config["SPLITTING_THRESHOLD"]:
-            print('Relabeling to avoid split!')
+            logging.debug('Relabeling to avoid split!')
             for x in range(previous_quantum_index, current_quantum_index):
                 splitting_labels.append(Labels.QUANTUM)
         else:
-            print('Copy existing labels!')
+            logging.debug('Copy existing labels!')
             splitting_labels.extend(line_labels[previous_quantum_index + 1:current_quantum_index + 1])
 
         # update previous quantum index
         previous_quantum_index = current_quantum_index
 
-    # check if last label has more follow up lines than threshold and relabel if not
+    # check if last label has more follow-up lines than threshold and relabel if not
     if len(quantum_label_indices) > 0 and (len(line_labels) - previous_quantum_index) > app.config["SPLITTING_THRESHOLD"]:
-        print('Last quantum part (index %d) has more follow up lines than threshold' %  previous_quantum_index)
+        logging.debug('Last quantum part (index %d) has more follow up lines than threshold' %  previous_quantum_index)
         splitting_labels.extend(line_labels[previous_quantum_index + 1:len(line_labels)])
     else:
-        print('Last quantum part (index %d) has less or equal follow up lines than threshold' %  quantum_label_indices[-1])
+        logging.debug('Last quantum part (index %d) has less or equal follow up lines than threshold' %  quantum_label_indices[-1])
         for x in range(len(line_labels) - previous_quantum_index - 1):
             splitting_labels.append(Labels.QUANTUM)
 
-    print('Final splitting labels for method %s: ' % method_baron.name)
-    print(splitting_labels)
+    logging.info('Final splitting labels for method %s: %s' % (method_baron.name, splitting_labels))
 
     # TODO: add new code parts
     label_map[method_baron.name] = 'qc'
@@ -89,66 +88,133 @@ def split_local_function(root_baron, method_baron, white_list, black_list, label
 
 def label_code_line(root_baron, line_baron, white_list, black_list, quantum_objects, method_labels):
 
+    # handle empty lines
+    if line_baron.type == 'endl':
+        return Labels.CLASSICAL, quantum_objects
+
+    logging.info('Label code line: %s' % line_baron.dumps())
+
+    # handle classical instructions
+    if line_baron.type == 'if' or line_baron.type == 'while' or line_baron.type == 'comment' \
+            or line_baron.type == 'print' or line_baron.type == 'ifelseblock' or line_baron.type == 'tuple':
+        logging.info('Basic Type. --> Classical!')
+        return Labels.CLASSICAL, quantum_objects
+
     if line_baron.type == 'atomtrailers':
 
         # retrieve identifier on the left to check if it is quantum-specific
         left_most_identifier = line_baron.value[0]
-        print('Object on the left side of the atomtrailer node: ', left_most_identifier)
+        logging.debug('Object on the left side of the atomtrailer node: %s' % left_most_identifier)
 
         # check if identifier is contained in the list with assigned quantum objects
-        if line_baron.value[0] in quantum_objects:
-            print('Object already assigned as quantum object!')
+        logging.debug('Check if %s is contained in %s: %s' % (str(line_baron.value[0]), quantum_objects, str(line_baron.value[0]) in quantum_objects))
+        if str(line_baron.value[0]) in quantum_objects:
+            logging.debug('Object already assigned as QUANTUM object!')
             return Labels.QUANTUM, quantum_objects
+        else:
+            logging.debug('Object is NOT assigned as quantum!')
 
         # check if identifier belongs to method invocation
         if line_baron.value[0] in method_labels:
+            logging.debug('Object belongs to method invocation')
             return method_labels[line_baron.value[0]], quantum_objects
 
         # check if the atomtrailer uses an import that is part of a quantum library defined in the knowledge base
-        if is_quantum_import(line_baron.value[0], root_baron):
+        if uses_quantum_import(line_baron.value[0], root_baron, white_list, black_list):
             return Labels.QUANTUM, quantum_objects
         else:
             return Labels.CLASSICAL, quantum_objects
 
     if line_baron.type == 'assignment':
-        assignment_label = label_code_line(root_baron, line_baron.value, white_list, black_list, quantum_objects, method_labels)
+        if line_baron.target.type == 'tuple':
+            logging.debug('Found an assignment tuple. Check if right side elements are Quantum...')
+            for i in range(len(line_baron.target.value)):
+                right_element = line_baron.value[i]
+                left_element = line_baron.target[i]
+                assignment_labels = label_code_line(root_baron, right_element, white_list, black_list, quantum_objects, method_labels)
+                if Labels.QUANTUM in assignment_labels:
+                    logging.debug('"%s" is QUANTUM, thus, "%s" is QUANTUM as well.' % (right_element, left_element))
+                    quantum_objects.append(left_element.value)
+        elif line_baron.target.type == 'name':
+            logging.debug('Found a single assignment. Check if right side is Quantum...')
+            assignment_labels = label_code_line(root_baron, line_baron.value, white_list, black_list, quantum_objects, method_labels)
+            # if assignment assigns a quantum object, the corresponding variable is stored
+            if Labels.QUANTUM in assignment_labels:
+                logging.debug('"%s" is QUANTUM, thus, "%s" is QUANTUM as well.' % (line_baron.value, line_baron.target.value))
+                quantum_objects.append(line_baron.target.value)
+        return assignment_labels, quantum_objects
 
-        # if assignment assigns a quantum object, the corresponding variable is stored
-        if assignment_label == Labels.QUANTUM:
+    # if line_baron.type == 'tuple':
+    #     logging.error('Tuple assignments are not supported yet: %s' % line_baron.type)
+    #     line_baron.help()
+    #
+    #     for i in range(len(line_baron.value)):
+    #         right_element = line_baron.value[i]
+    #         left_element = line_baron.target[i]
+    #         assignment_labels = label_code_line(root_baron, right_element, white_list, black_list, quantum_objects, method_labels)
+    #         if Labels.QUANTUM in assignment_labels:
+    #             print('"%s" is QUANTUM, thus, "%s" is QUANTUM as well.' % (right_element, left_element))
+    #             quantum_objects.extend(left_element.value)
+    #
+    #     return Labels.CLASSICAL, quantum_objects
 
-            # if multiple variables are on the left side, assign all at once
-            for quantum_object in line_baron.target:
-                quantum_objects.extend(quantum_object.value)
-        return assignment_label, quantum_objects
-
-    # handle classical instructions
-    if line_baron.type == 'if' or line_baron.type == 'while' or line_baron.type == 'comment' \
-        or line_baron.type == 'endl' or line_baron.type == 'print' or line_baron.type == 'ifelseblock':
-        return Labels.CLASSICAL, quantum_objects
-
-    print('Unexpected node type received: ', line_baron.type)
+    logging.error('Unexpected node type received: %s' % line_baron.type)
     return Labels.CLASSICAL, quantum_objects
 
+def is_in_knowledge_base(package_orig, white_list):
+    if package_orig is None or not package_orig:
+        return False
 
-def is_quantum_import(line_value, root_baron):
-    imports = root_baron.find_all('import')
+    package_copy = package_orig[:]
+    search_list = []
+    while len(package_copy) > 0:
+        search_list.append(package_copy.pop(0))
+        if ".".join(search_list) in white_list:
+            return True
 
-    for i in imports:
-        for dottedAsNameNode in i.value:
-            print('Checking import: ', dottedAsNameNode.target)
+    return False
+
+
+def uses_quantum_import(line_value, root_baron, white_list, black_list):
+    import_statement = get_import_statement(line_value, root_baron)
+    logging.info('Related module for line "%s" is: "%s"' % (line_value, import_statement))
+    found_in_whitelist = is_in_knowledge_base(import_statement, white_list)
+    found_in_blacklist = is_in_knowledge_base(import_statement, black_list)
+    if found_in_whitelist:
+        if found_in_blacklist:
+            logging.info('Found module in whitelist but in blacklist, too. --> Classical!')
+        else:
+            logging.info('Found module in whitelist but not in blacklist. --> Quantum!')
+    else:
+        logging.info('Did not find module in whitelist. --> Classical!')
+    return found_in_whitelist and not found_in_blacklist
+
+
+def get_import_statement(line_value, root_baron):
+    logging.info('Get module for %s...' % line_value)
+
+    # Search through all 'from' imports and return matching modules
+    # E.g.: from qiskit.visualization import plot_histogram --> return qiskit.visualization.plot_histogram
+    as_imports = root_baron.find_all('import')
+    for as_import in as_imports:
+        for dottedAsNameNode in as_import.value:
             if dottedAsNameNode.target == line_value.value:
-                print('Found potential import...:', line_value)
-                import_parts = [value.value for value in dottedAsNameNode.value if value.type == 'name']
-                # TODO: check for each sub-string if it is part of the whitelist/blacklist
-                print('.'.join(import_parts))
+                return [value.value for value in dottedAsNameNode.value if value.type == 'name']
 
+    # Search through all 'as' imports and return matching modules
+    # E.g.: import qiskit as qs --> return qiskit
     from_imports = root_baron.find_all('from_import')
-    # TODO: handle from_imports
+    for from_import in from_imports:
+        for target in from_import.targets:
+            if str(target.value) == str(line_value):
+                import_parts = [value.value for value in from_import.value if value.type == 'name']
+                import_parts.append(target.value)
+                return import_parts
 
-    print(imports)
-    print(from_imports)
+    return []
+
 
 
 def split_method(method_baron, start_index, end_index):
-    print('Splitting method from index %d to %d' % (start_index, end_index))
+    logging.info('Splitting method from index %d to %d' % (start_index, end_index))
     # TODO
