@@ -16,11 +16,42 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 # ******************************************************************************
+from redbaron import RedBaron
 
 from app import app
 from app.script_splitting.Labels import Labels
 import numpy as np
 import logging
+
+
+def is_hybrid(splitting_labels):
+    return Labels.CLASSICAL in splitting_labels and Labels.QUANTUM in splitting_labels
+
+
+def split_code_block(root_baron, method_baron, splitting_labels):
+    logging.info('Break up code block into several parts based on final labels:')
+    for i in range(len(method_baron.value)):
+        if method_baron.value[i].type != "endl":
+            logging.debug("[%i] %s [%s]" % (i, method_baron.value[i], splitting_labels[i]))
+
+    first_block = []
+    first_block_label = splitting_labels[0]
+    while splitting_labels[0] == first_block_label:
+        to_add = method_baron.value[0]
+        first_block.append(to_add)
+        splitting_labels.pop(0)
+
+    logging.info("Extract first code block to separate function...")
+    # create new def node
+    create_str = "def new_block():"
+    for line in first_block:
+        create_str += "\n    " + str(line.value)
+    logging.debug('Extracted method:\n%s' % create_str)
+    def_node = RedBaron(create_str)
+
+    # TODO add to root document
+    # TODO set parameters correctly
+    # TODO run in a loop/recursively (while method is_hybrid)
 
 
 def split_local_function(root_baron, method_baron, white_list, black_list, label_map, quantum_objects):
@@ -72,16 +103,17 @@ def split_local_function(root_baron, method_baron, white_list, black_list, label
 
     # check if last label has more follow-up lines than threshold and relabel if not
     if len(quantum_label_indices) > 0 and (len(line_labels) - previous_quantum_index) > app.config["SPLITTING_THRESHOLD"]:
-        logging.debug('Last quantum part (index %d) has more follow up lines than threshold' %  previous_quantum_index)
+        logging.debug('Last quantum part (index %d) has more follow up lines than threshold' % previous_quantum_index)
         splitting_labels.extend(line_labels[previous_quantum_index + 1:len(line_labels)])
     else:
-        logging.debug('Last quantum part (index %d) has less or equal follow up lines than threshold' %  quantum_label_indices[-1])
+        logging.debug('Last quantum part (index %d) has less or equal follow up lines than threshold' % quantum_label_indices[-1])
         for x in range(len(line_labels) - previous_quantum_index - 1):
             splitting_labels.append(Labels.QUANTUM)
 
     logging.info('Final splitting labels for method %s: %s' % (method_baron.name, splitting_labels))
 
-    # TODO: add new code parts
+    split_code_block(root_baron, method_baron, splitting_labels)
+
     label_map[method_baron.name] = Labels.QUANTUM
 
     return label_map
