@@ -23,7 +23,9 @@ from app.script_splitting.labeler import split_local_function
 import json
 import logging
 
+
 logging.basicConfig(filename='logger.log', encoding='utf-8', level=logging.DEBUG)
+
 
 def split_qc_script(script):
     app.logger.info('Starting script splitting algorithm...')

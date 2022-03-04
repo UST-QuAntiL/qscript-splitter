@@ -22,8 +22,9 @@ from app.script_splitting.Labels import Labels
 import numpy as np
 import logging
 
+
 def split_local_function(root_baron, method_baron, white_list, black_list, label_map, quantum_objects):
-    logging.info('Splitting method with name: %s' % method_baron.name)
+    logging.info('Splitting method with name: %s()' % method_baron.name)
     logging.debug('Already labeled functions: %s' % label_map)
     logging.debug('Method has %d lines of code: ' % len(method_baron.value))
 
@@ -81,7 +82,7 @@ def split_local_function(root_baron, method_baron, white_list, black_list, label
     logging.info('Final splitting labels for method %s: %s' % (method_baron.name, splitting_labels))
 
     # TODO: add new code parts
-    label_map[method_baron.name] = 'qc'
+    label_map[method_baron.name] = Labels.QUANTUM
 
     return label_map
 
@@ -100,8 +101,8 @@ def label_code_line(root_baron, line_baron, white_list, black_list, quantum_obje
         logging.info('Basic Type. --> Classical!')
         return Labels.CLASSICAL, quantum_objects
 
+    # handle atomtrailers, i.e., method invocations and other basic elements
     if line_baron.type == 'atomtrailers':
-
         # retrieve identifier on the left to check if it is quantum-specific
         left_most_identifier = line_baron.value[0]
         logging.debug('Object on the left side of the atomtrailer node: %s' % left_most_identifier)
@@ -125,51 +126,64 @@ def label_code_line(root_baron, line_baron, white_list, black_list, quantum_obje
         else:
             return Labels.CLASSICAL, quantum_objects
 
+    # handle assignments
     if line_baron.type == 'assignment':
+
+        # handle tuple assignments: a,b = c,d
         if line_baron.target.type == 'tuple':
             logging.debug('Found an assignment tuple. Check if right side elements are Quantum...')
+            assignment_labels = []
+            # handle all assignments separately
             for i in range(len(line_baron.target.value)):
                 right_element = line_baron.value[i]
                 left_element = line_baron.target[i]
+                # recursively get labels for right part
                 assignment_labels = label_code_line(root_baron, right_element, white_list, black_list, quantum_objects, method_labels)
+                logging.debug('Assignment_labels: %s' % str(assignment_labels))
                 if Labels.QUANTUM in assignment_labels:
+                    # if element on the right is from a quantum module then the target variable is quantum as well
                     logging.debug('"%s" is QUANTUM, thus, "%s" is QUANTUM as well.' % (right_element, left_element))
                     quantum_objects.append(left_element.value)
+            return assignment_labels, quantum_objects
+
+        # handle single element assignments
         elif line_baron.target.type == 'name':
             logging.debug('Found a single assignment. Check if right side is Quantum...')
             assignment_labels = label_code_line(root_baron, line_baron.value, white_list, black_list, quantum_objects, method_labels)
             # if assignment assigns a quantum object, the corresponding variable is stored
             if Labels.QUANTUM in assignment_labels:
+                # if element on the right is from a quantum module then the target variable is quantum as well
                 logging.debug('"%s" is QUANTUM, thus, "%s" is QUANTUM as well.' % (line_baron.value, line_baron.target.value))
                 quantum_objects.append(line_baron.target.value)
-        return assignment_labels, quantum_objects
-
-    # if line_baron.type == 'tuple':
-    #     logging.error('Tuple assignments are not supported yet: %s' % line_baron.type)
-    #     line_baron.help()
-    #
-    #     for i in range(len(line_baron.value)):
-    #         right_element = line_baron.value[i]
-    #         left_element = line_baron.target[i]
-    #         assignment_labels = label_code_line(root_baron, right_element, white_list, black_list, quantum_objects, method_labels)
-    #         if Labels.QUANTUM in assignment_labels:
-    #             print('"%s" is QUANTUM, thus, "%s" is QUANTUM as well.' % (right_element, left_element))
-    #             quantum_objects.extend(left_element.value)
-    #
-    #     return Labels.CLASSICAL, quantum_objects
+            return assignment_labels, quantum_objects
 
     logging.error('Unexpected node type received: %s' % line_baron.type)
     return Labels.CLASSICAL, quantum_objects
 
-def is_in_knowledge_base(package_orig, white_list):
-    if package_orig is None or not package_orig:
+
+def is_in_knowledge_base(package_orig, knowledge_base):
+    logging.info('Check if %s is part of %s' % (package_orig, knowledge_base))
+
+    # if any parameter is not defined, log warning and return False
+    if package_orig is None or knowledge_base is None:
+        logging.warning("Search for %s in %s is invalid since one of both is None." % (package_orig, knowledge_base))
         return False
 
+    # if search term is empty, return False
+    if not package_orig:
+        logging.debug("Search for empty list in knowledge base --> return False")
+        return False
+
+    # copy array to work on a copy instead of the original
     package_copy = package_orig[:]
+
+    # Search with in KB continuously adding elements from package_orig to search term.
+    # E.g.: packages_copy =  ['first','second','third']
+    # Start to search for 'first' in KB. Continue with 'first.second', and finally search for 'first.second.third' in KB
     search_list = []
     while len(package_copy) > 0:
         search_list.append(package_copy.pop(0))
-        if ".".join(search_list) in white_list:
+        if ".".join(search_list) in knowledge_base:
             return True
 
     return False
@@ -178,6 +192,7 @@ def is_in_knowledge_base(package_orig, white_list):
 def uses_quantum_import(line_value, root_baron, white_list, black_list):
     import_statement = get_import_statement(line_value, root_baron)
     logging.info('Related module for line "%s" is: "%s"' % (line_value, import_statement))
+    # check white and black list of knowledge base separately
     found_in_whitelist = is_in_knowledge_base(import_statement, white_list)
     found_in_blacklist = is_in_knowledge_base(import_statement, black_list)
     if found_in_whitelist:
@@ -187,6 +202,7 @@ def uses_quantum_import(line_value, root_baron, white_list, black_list):
             logging.info('Found module in whitelist but not in blacklist. --> Quantum!')
     else:
         logging.info('Did not find module in whitelist. --> Classical!')
+    # element must be in white list but not in blacklist
     return found_in_whitelist and not found_in_blacklist
 
 
