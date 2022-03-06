@@ -53,6 +53,7 @@ def get_all_variables_of_line(line):
             created_variables.append(line.target.value)
 
     # TODO: Get used variables
+    # TODO: What should we do with method invocations?
 
     return created_variables, referenced_variables
 
@@ -176,7 +177,8 @@ def label_code_line(root_baron, line_baron, white_list, black_list, quantum_obje
 
     # handle classical instructions
     if line_baron.type == 'if' or line_baron.type == 'while' or line_baron.type == 'comment' \
-            or line_baron.type == 'print' or line_baron.type == 'ifelseblock' or line_baron.type == 'tuple':
+            or line_baron.type == 'print' or line_baron.type == 'ifelseblock' or line_baron.type == 'tuple'\
+            or line_baron.type == 'int' or line_baron.type == "list":
         logging.info('Basic Type. --> Classical!')
         return Labels.CLASSICAL, quantum_objects
 
@@ -307,7 +309,6 @@ def get_import_statement(line_value, root_baron):
                 return import_parts
 
     return []
-
 
 
 def split_method(method_baron, start_index, end_index):
