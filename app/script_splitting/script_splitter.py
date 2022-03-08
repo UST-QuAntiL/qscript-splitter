@@ -20,26 +20,26 @@
 from redbaron import RedBaron
 from app.script_splitting.Labels import Labels
 import logging
-import random
-import string
 
 
 def split_script(script, splitting_labels):
     for i in range(len(script)):
-        print("%s\t%s" % (splitting_labels[i], repr(script[i].dumps())))
+        print("%s: %s" % (splitting_labels[i], repr(script[i].dumps())))
 
     to_extract = []
     result_definitions = []
+    counter = 0
     for i in range(len(splitting_labels)):
         if splitting_labels[i] == Labels.IMPORTS or script[i].type == "endl":
             continue
         if len(to_extract) == 0:
             logging.debug("Start new block")
+            counter += 1
         logging.debug('Add %s to current block' % repr(script[i].dumps()))
         to_extract.append(script[i])
         # for very last element or when next elements label is different
         if is_end_of_code_block(i, splitting_labels):
-            new_method = extract_method(to_extract)
+            new_method = extract_method(to_extract, counter)
             print(new_method.dumps())
             logging.debug("Created method: %s" % repr(new_method.dumps()))
             result_definitions.append(new_method)
@@ -85,19 +85,18 @@ def get_all_variables_of_line(line):
     return created_variables, referenced_variables
 
 
-def extract_method(code_block):
+def extract_method(code_block, counter):
     logging.info("Extract code block to separate function...")
 
     # create method name
-    letters = string.ascii_lowercase
-    method_name = ''.join(random.choice(letters) for i in range(10))
+    method_name = 'function_' + str(counter)
 
     # create parameters list
     variables = get_all_external_variables_of_code_block(code_block)
     parameters = ",".join(variables)
 
     # create new def node
-    create_str = "def extracted_method_" + method_name + "(" + parameters + "):"
+    create_str = "def " + method_name + "(" + parameters + "):"
 
     # add lines to def node
     for line in code_block:
