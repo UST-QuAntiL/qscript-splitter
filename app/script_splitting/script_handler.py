@@ -19,7 +19,9 @@
 
 from app import app
 from redbaron import RedBaron
-from app.script_splitting.labeler import split_local_function
+from app.script_splitting.flattener import flatten
+from app.script_splitting.script_analyzer import get_labels
+from app.script_splitting.script_splitter import split_script
 import json
 import logging
 
@@ -28,10 +30,10 @@ logging.basicConfig(filename='logger.log', encoding='utf-8', level=logging.DEBUG
 
 
 def split_qc_script(script):
-    app.logger.info('Starting script splitting algorithm...')
-
     # load white and black lists
-    with open('script_splitting/knowledge_base.json', 'r') as knowledge_base:
+    knowledge_base_path = 'script_splitting/knowledge_base.json'
+    logging.info('Load Knowledge Base: %s' % knowledge_base_path)
+    with open(knowledge_base_path, 'r') as knowledge_base:
         knowledge_base_json = json.load(knowledge_base)
     white_list = knowledge_base_json['white_list']
     black_list = knowledge_base_json['black_list']
@@ -39,29 +41,17 @@ def split_qc_script(script):
     logging.debug('Number of black list rules: %s' % len(black_list))
 
     # RedBaron object containing all information about the script to split
+    logging.info('Load Script: %s' % script)
     with open(script, "r") as source_code:
         qc_script_baron = RedBaron(source_code.read())
 
-    # retrieve all nodes invoking a function (contain a call node at the second position)
-    function_invocation_nodes = qc_script_baron.find_all('atomtrailers',
-                                                         value=lambda atomtrailer_node_value: len(atomtrailer_node_value) >= 2
-                                                         and atomtrailer_node_value[1].type == 'call')
-    logging.debug('Found %d function invocations!' % len(function_invocation_nodes))
+    logging.info('Flatten Script')
+    flattened_file = flatten(qc_script_baron)
 
-    # extract names of invoked functions
-    invoked_function_names = []
-    for function_invocation_node in function_invocation_nodes:
-        invoked_function_names.append(function_invocation_node[0].value)
-    logging.debug('Invoked functions: %s' % invoked_function_names)
+    logging.info('Start analyzing script...')
+    labels = get_labels(flattened_file, white_list, black_list)
 
-    # get all def nodes in the script
-    def_nodes = qc_script_baron.find_all('def', name=lambda name: name in invoked_function_names)
-    # TODO: handle ifs, while, ifelseblock, etc. contained in identified def_nodes
-    # TODO: assign global variables to list of quantum objects
+    logging.info('Start splitting script...')
+    split_script(flattened_file, labels)
 
-    # split local methods and retrieve label if they are quantum or classical
-    label_map = {}
-    for def_node in def_nodes:
-        label_map = split_local_function(qc_script_baron, def_node, white_list, black_list, label_map, [])
-        logging.debug('Retrieved label %s for method with name: %s' % (label_map[def_node.name], def_node.name))
 

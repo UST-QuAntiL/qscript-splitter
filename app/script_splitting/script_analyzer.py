@@ -16,14 +16,73 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 # ******************************************************************************
+#
 from redbaron import RedBaron
 
 from app import app
 from app.script_splitting.Labels import Labels
 import numpy as np
-import logging
 import random
 import string
+import logging
+
+
+def get_labels(script, white_list, black_list):
+    line_labels = [None] * len(script)
+    quantum_objects = []
+
+    for i in range(len(script)):
+        line_label, quantum_objects = label_code_line(script, script[i], white_list, black_list, quantum_objects, line_labels)
+        logging.debug("Computed label %s: for line %s" % (line_label, repr(script[i].dumps())))
+        line_labels[i] = line_label
+
+    logging.debug("All labels: %s" % line_labels)
+
+    line_labels = np.array(line_labels, dtype=object)
+    quantum_label_indices = np.where(line_labels == Labels.QUANTUM)[0]
+
+    logging.debug("Start relabeling based on threshold=%s" % app.config["SPLITTING_THRESHOLD"])
+    splitting_labels = []
+    # check if first label has preceding classical part bigger than threshold and relabel if not
+    if quantum_label_indices[0] >= app.config["SPLITTING_THRESHOLD"]:
+        splitting_labels.extend(line_labels[:quantum_label_indices[0] + 1])
+        previous_quantum_index = quantum_label_indices[0]
+    else:
+        for x in range(quantum_label_indices[0] + 1):
+            splitting_labels.append(Labels.QUANTUM)
+        previous_quantum_index = quantum_label_indices[0]
+
+    # relabel if distance between previous and current quantum index is larger than threshold
+    for current_quantum_index in quantum_label_indices[1:len(quantum_label_indices)]:
+        logging.debug('Current quantum index: %s' % current_quantum_index)
+        logging.debug('Previous quantum index: %s' % previous_quantum_index)
+
+        # check if distance between previous and current quantum index is larger than threshold
+        if current_quantum_index - previous_quantum_index <= app.config["SPLITTING_THRESHOLD"]:
+            logging.debug('Relabeling to avoid split!')
+            for x in range(previous_quantum_index, current_quantum_index):
+                splitting_labels.append(Labels.QUANTUM)
+        else:
+            logging.debug('Copy existing labels!')
+            splitting_labels.extend(line_labels[previous_quantum_index + 1:current_quantum_index + 1])
+
+        # update previous quantum index
+        previous_quantum_index = current_quantum_index
+
+    # check if last label has more follow-up lines than threshold and relabel if not
+    if len(quantum_label_indices) > 0 and (len(line_labels) - previous_quantum_index) > app.config["SPLITTING_THRESHOLD"]:
+        logging.debug('Last quantum part (index %d) has more follow up lines than threshold' % previous_quantum_index)
+        splitting_labels.extend(line_labels[previous_quantum_index + 1:len(line_labels)])
+    else:
+        logging.debug('Last quantum part (index %d) has less or equal follow up lines than threshold' % quantum_label_indices[-1])
+        for x in range(len(line_labels) - previous_quantum_index - 1):
+            splitting_labels.append(Labels.QUANTUM)
+
+    logging.info('Final splitting labels for method %s: %s' % (script.name, splitting_labels))
+
+    #    line_labels[script.name] = Labels.QUANTUM
+
+    return line_labels
 
 
 def get_all_external_variables_of_code_block(code_block):
@@ -102,72 +161,8 @@ def split_code_block(root_baron, method_baron, splitting_labels):
             to_extract = []
 
 
-def split_local_function(root_baron, method_baron, white_list, black_list, label_map, quantum_objects):
-    logging.info('Splitting method with name: %s()' % method_baron.name)
-    logging.debug('Already labeled functions: %s' % label_map)
-    logging.debug('Method has %d lines of code: ' % len(method_baron.value))
-
-    # label all lines within the current function
-    line_labels = []
-    for line in method_baron.value:
-        label, quantum_objects = label_code_line(root_baron, line, white_list, black_list, quantum_objects, label_map)
-        line_labels.append(label)
-    line_labels = np.array(line_labels, dtype=object)
-    quantum_label_indices = np.where(line_labels == Labels.QUANTUM)[0]
-
-    # splitting labels based on code analysis and threshold
-    splitting_labels = []
-
-    # if the complete code block is classical return with classical label
-    if len(quantum_label_indices) == 0:
-        label_map[method_baron.name] = Labels.CLASSICAL
-        return label_map
-
-    # check if first label has preceding classical part bigger than threshold and relabel if not
-    if quantum_label_indices[0] >= app.config["SPLITTING_THRESHOLD"]:
-        splitting_labels.extend(line_labels[:quantum_label_indices[0] + 1])
-        previous_quantum_index = quantum_label_indices[0]
-    else:
-        for x in range(quantum_label_indices[0] + 1):
-            splitting_labels.append(Labels.QUANTUM)
-        previous_quantum_index = quantum_label_indices[0]
-
-    # relabel if distance between previous and current quantum index is larger than threshold
-    for current_quantum_index in quantum_label_indices[1:len(quantum_label_indices)]:
-        logging.debug('Current quantum index: %s' % current_quantum_index)
-        logging.debug('Previous quantum index: %s' % previous_quantum_index)
-
-        # check if distance between previous and current quantum index is larger than threshold
-        if current_quantum_index - previous_quantum_index <= app.config["SPLITTING_THRESHOLD"]:
-            logging.debug('Relabeling to avoid split!')
-            for x in range(previous_quantum_index, current_quantum_index):
-                splitting_labels.append(Labels.QUANTUM)
-        else:
-            logging.debug('Copy existing labels!')
-            splitting_labels.extend(line_labels[previous_quantum_index + 1:current_quantum_index + 1])
-
-        # update previous quantum index
-        previous_quantum_index = current_quantum_index
-
-    # check if last label has more follow-up lines than threshold and relabel if not
-    if len(quantum_label_indices) > 0 and (len(line_labels) - previous_quantum_index) > app.config["SPLITTING_THRESHOLD"]:
-        logging.debug('Last quantum part (index %d) has more follow up lines than threshold' % previous_quantum_index)
-        splitting_labels.extend(line_labels[previous_quantum_index + 1:len(line_labels)])
-    else:
-        logging.debug('Last quantum part (index %d) has less or equal follow up lines than threshold' % quantum_label_indices[-1])
-        for x in range(len(line_labels) - previous_quantum_index - 1):
-            splitting_labels.append(Labels.QUANTUM)
-
-    logging.info('Final splitting labels for method %s: %s' % (method_baron.name, splitting_labels))
-
-    split_code_block(root_baron, method_baron, splitting_labels)
-
-    label_map[method_baron.name] = Labels.QUANTUM
-
-    return label_map
-
-
 def label_code_line(root_baron, line_baron, white_list, black_list, quantum_objects, method_labels):
+    return Labels.QUANTUM, quantum_objects
 
     # handle empty lines
     if line_baron.type == 'endl':
@@ -177,7 +172,7 @@ def label_code_line(root_baron, line_baron, white_list, black_list, quantum_obje
 
     # handle classical instructions
     if line_baron.type == 'if' or line_baron.type == 'while' or line_baron.type == 'comment' \
-            or line_baron.type == 'print' or line_baron.type == 'ifelseblock' or line_baron.type == 'tuple'\
+            or line_baron.type == 'print' or line_baron.type == 'ifelseblock' or line_baron.type == 'tuple' \
             or line_baron.type == 'int' or line_baron.type == "list":
         logging.info('Basic Type. --> Classical!')
         return Labels.CLASSICAL, quantum_objects
@@ -258,7 +253,7 @@ def is_in_knowledge_base(package_orig, knowledge_base):
     # copy array to work on a copy instead of the original
     package_copy = package_orig[:]
 
-    # Search with in KB continuously adding elements from package_orig to search term.
+    # Search in KB iteratively adding elements from package_orig to search term.
     # E.g.: packages_copy =  ['first','second','third']
     # Start to search for 'first' in KB. Continue with 'first.second', and finally search for 'first.second.third' in KB
     search_list = []
@@ -308,6 +303,7 @@ def get_import_statement(line_value, root_baron):
                 import_parts.append(target.value)
                 return import_parts
 
+    # Return empty list since statement is not from any imported module
     return []
 
 
