@@ -18,118 +18,77 @@
 # ******************************************************************************
 #
 
-from redbaron import RedBaron
 from app import app
 from app.script_splitting.Labels import Labels
-import numpy as np
 import logging
 
 
 def get_labels(script, white_list, black_list):
-    line_labels = [None] * len(script)
+    line_labels = []
     quantum_objects = []
 
-    for i in range(len(script)):
-        line_label, quantum_objects = label_code_line(script, script[i], white_list, black_list, quantum_objects,
-                                                      line_labels)
-        logging.debug("%s --> %s" % (repr(script[i].dumps()), line_label))
-        line_labels[i] = line_label
+    for line_baron in script:
+        logging.debug('Label code line: %s...' % repr(line_baron.dumps()))
+
+        # handle imports, comments, and black lines
+        if line_baron.type in ['import', 'from_import', 'endl', 'comment']:
+            logging.debug('Import, comment, or black Line --> OTHER')
+            label = Labels.OTHER
+
+        # handle basic classical instructions
+        elif line_baron.type in ['if', 'while', 'print', 'ifelseblock', 'tuple', 'int', 'list']:
+            logging.info('Basic Type. --> CLASSICAL!')
+            label = Labels.CLASSIC
+
+        # handle assignments
+        elif line_baron.type == 'assignment':
+            if line_baron.value.type != 'atomtrailers':
+                logging.error('Unexpected node type received: %s' % line_baron.value.type)
+            label = handle_atomic_trailer_nodes(line_baron.value, script, white_list, black_list, quantum_objects)
+            if label == Labels.QUANTUM:
+                logging.debug('"%s" is QUANTUM, thus, "%s" is QUANTUM as well.' % (line_baron.value, line_baron.target.value))
+                quantum_objects.append(line_baron.target.value)
+
+        # handle atomtrailers
+        elif line_baron.type == 'atomtrailers':
+            label = handle_atomic_trailer_nodes(line_baron, script, white_list, black_list, quantum_objects)
+
+        else:
+            logging.error('Unexpected node type received: %s' % line_baron.type)
+            label = Labels.OTHER
+
+        line_labels.append(label)
 
     splitting_labels = apply_threshold(script, line_labels)
 
     return splitting_labels
 
 
-def label_code_line(root_baron, line_baron, white_list, black_list, quantum_objects, method_labels):
-    logging.debug('Label code line: %s...' % repr(line_baron.dumps()))
+def handle_atomic_trailer_nodes(atom_trailers_node, script, white_list, black_list, quantum_objects):
+    # retrieve identifier on the left to check if it is quantum-specific
+    left_most_identifier = atom_trailers_node.value[0]
+    logging.debug('Object on the left side of the atomtrailer node: %s' % left_most_identifier)
 
-    # handle imports
-    if line_baron.type == 'import' or line_baron.type == 'from_import':
-        return Labels.OTHER, quantum_objects
+    # check if identifier is contained in the list with assigned quantum objects
+    logging.debug('Check if %s is contained in %s: %s' % (
+        str(atom_trailers_node.value[0]), quantum_objects, str(atom_trailers_node.value[0]) in quantum_objects))
+    if str(atom_trailers_node.value[0]) in quantum_objects:
+        logging.debug('Object already assigned as QUANTUM object!')
+        return Labels.QUANTUM
+    else:
+        logging.debug('Object is NOT yet assigned as quantum!')
 
-    # handle empty lines
-    if line_baron.type == 'endl':
-        return Labels.OTHER, quantum_objects
-
-    # handle comments
-    if line_baron.type == 'comment':
-        return Labels.OTHER, quantum_objects
-
-    # handle classical instructions
-    if line_baron.type == 'if' or line_baron.type == 'while' \
-            or line_baron.type == 'print' or line_baron.type == 'ifelseblock' or line_baron.type == 'tuple' \
-            or line_baron.type == 'int' or line_baron.type == "list":
-        logging.info('Basic Type. --> Classical!')
-        return Labels.CLASSIC, quantum_objects
-
-    # handle atomtrailers, i.e., method invocations and other basic elements
-    if line_baron.type == 'atomtrailers':
-        # retrieve identifier on the left to check if it is quantum-specific
-        left_most_identifier = line_baron.value[0]
-        logging.debug('Object on the left side of the atomtrailer node: %s' % left_most_identifier)
-
-        # check if identifier is contained in the list with assigned quantum objects
-        logging.debug('Check if %s is contained in %s: %s' % (
-            str(line_baron.value[0]), quantum_objects, str(line_baron.value[0]) in quantum_objects))
-        if str(line_baron.value[0]) in quantum_objects:
-            logging.debug('Object already assigned as QUANTUM object!')
-            return Labels.QUANTUM, quantum_objects
-        else:
-            logging.debug('Object is NOT assigned as quantum!')
-
-        # check if identifier belongs to method invocation
-        if line_baron.value[0] in method_labels:
-            logging.debug('Object belongs to method invocation')
-            return method_labels[line_baron.value[0]], quantum_objects
-
-        # check if the atomtrailer uses an import that is part of a quantum library defined in the knowledge base
-        if uses_quantum_import(line_baron.value[0], root_baron, white_list, black_list):
-            return Labels.QUANTUM, quantum_objects
-        else:
-            return Labels.CLASSIC, quantum_objects
-
-    # handle assignments
-    if line_baron.type == 'assignment':
-
-        # handle tuple assignments: a,b = c,d
-        if line_baron.target.type == 'tuple':
-            logging.debug('Found an assignment tuple. Check if right side elements are Quantum...')
-            assignment_labels = []
-            # handle all assignments separately
-            for i in range(len(line_baron.target.value)):
-                right_element = line_baron.value[i]
-                left_element = line_baron.target[i]
-                # recursively get labels for right part
-                assignment_labels = label_code_line(root_baron, right_element, white_list, black_list, quantum_objects,
-                                                    method_labels)
-                logging.debug('Assignment_labels: %s' % str(assignment_labels))
-                if Labels.QUANTUM in assignment_labels:
-                    # if element on the right is from a quantum module then the target variable is quantum as well
-                    logging.debug('"%s" is QUANTUM, thus, "%s" is QUANTUM as well.' % (right_element, left_element))
-                    quantum_objects.append(left_element.value)
-            return assignment_labels, quantum_objects
-
-        # handle single element assignments
-        elif line_baron.target.type == 'name':
-            logging.debug('Found a single assignment. Check if right side is Quantum...')
-            assignment_labels = label_code_line(root_baron, line_baron.value, white_list, black_list, quantum_objects,
-                                                method_labels)
-            # if assignment assigns a quantum object, the corresponding variable is stored
-            if Labels.QUANTUM in assignment_labels:
-                # if element on the right is from a quantum module then the target variable is quantum as well
-                logging.debug(
-                    '"%s" is QUANTUM, thus, "%s" is QUANTUM as well.' % (line_baron.value, line_baron.target.value))
-                quantum_objects.append(line_baron.target.value)
-            return assignment_labels, quantum_objects
-
-    logging.error('Unexpected node type received: %s' % line_baron.type)
-    return Labels.CLASSIC, quantum_objects
+    # check if the atomtrailer uses an import that is part of a quantum library defined in the knowledge base
+    if uses_quantum_import(atom_trailers_node.value[0], script, white_list, black_list):
+        return Labels.QUANTUM
+    else:
+        return Labels.CLASSIC
 
 
-def uses_quantum_import(line_value, root_baron, white_list, black_list):
-    import_statement = get_import_statement(line_value, root_baron)
+def uses_quantum_import(line_value, script, white_list, black_list):
+    import_statement = get_import_statement(line_value, script)
     logging.info('Related module for line "%s" is: "%s"' % (line_value, import_statement))
-    # check white and black list of knowledge base separately
+    # check white and black list of knowledge bases separately
     found_in_whitelist = is_in_knowledge_base(import_statement, white_list)
     found_in_blacklist = is_in_knowledge_base(import_statement, black_list)
     if found_in_whitelist:
@@ -143,12 +102,12 @@ def uses_quantum_import(line_value, root_baron, white_list, black_list):
     return found_in_whitelist and not found_in_blacklist
 
 
-def get_import_statement(line_value, root_baron):
+def get_import_statement(line_value, script):
     logging.info('Get module for %s...' % line_value)
 
     # Search through all 'from' imports and return matching modules
     # E.g.: from qiskit.visualization import plot_histogram --> return qiskit.visualization.plot_histogram
-    as_imports = root_baron.find_all('import')
+    as_imports = script.find_all('import')
     for as_import in as_imports:
         for dottedAsNameNode in as_import.value:
             if dottedAsNameNode.target == line_value.value:
@@ -156,7 +115,7 @@ def get_import_statement(line_value, root_baron):
 
     # Search through all 'as' imports and return matching modules
     # E.g.: import qiskit as qs --> return qiskit
-    from_imports = root_baron.find_all('from_import')
+    from_imports = script.find_all('from_import')
     for from_import in from_imports:
         for target in from_import.targets:
             if str(target.value) == str(line_value):
@@ -169,8 +128,6 @@ def get_import_statement(line_value, root_baron):
 
 
 def is_in_knowledge_base(package_orig, knowledge_base):
-    logging.info('Check if %s is part of %s' % (package_orig, knowledge_base))
-
     # if any parameter is not defined, log warning and return False
     if package_orig is None or knowledge_base is None:
         logging.warning("Search for %s in %s is invalid since one of both is None." % (package_orig, knowledge_base))
@@ -197,9 +154,10 @@ def is_in_knowledge_base(package_orig, knowledge_base):
 
 
 def apply_threshold(script, line_labels):
-    logging.debug("Start relabeling with threshold=%s" % app.config["SPLITTING_THRESHOLD"])
+    logging.debug("Start relabeling with threshold=%s..." % app.config["SPLITTING_THRESHOLD"])
     splitting_labels = line_labels[:]
 
+    # if code is not hybrid, no splitting is necessary
     if Labels.CLASSIC not in line_labels:
         logging.warning("No relabeling necessary since it does not contain any classical parts!")
         return splitting_labels
@@ -218,8 +176,8 @@ def apply_threshold(script, line_labels):
     # calculate number of trailing classical lines and relabel if it is smaller than threshold
     relabel_if_necessary(classical_indices, splitting_labels)
 
-    logging.debug("Labels without threshold %s" % line_labels)
-    logging.debug("Labels with threshold(%s) %s" % (app.config["SPLITTING_THRESHOLD"], splitting_labels))
+    logging.debug("Labels without threshold: %s" % line_labels)
+    logging.debug("Labels with threshold(%s): %s" % (app.config["SPLITTING_THRESHOLD"], splitting_labels))
 
     return splitting_labels
 

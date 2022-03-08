@@ -31,4 +31,4 @@ class Config(object):
     RESULT_FOLDER = os.environ.get('RESULT_FOLDER') or os.path.join(basedir, 'generated-files')
 
     # number of consecutive lines of classical code allowed in quantum parts
-    SPLITTING_THRESHOLD = 2
+    SPLITTING_THRESHOLD = 4
