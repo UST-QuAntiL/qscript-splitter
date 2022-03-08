@@ -17,13 +17,11 @@
 #  limitations under the License.
 # ******************************************************************************
 #
-from redbaron import RedBaron
 
+from redbaron import RedBaron
 from app import app
 from app.script_splitting.Labels import Labels
 import numpy as np
-import random
-import string
 import logging
 
 
@@ -32,150 +30,37 @@ def get_labels(script, white_list, black_list):
     quantum_objects = []
 
     for i in range(len(script)):
-        line_label, quantum_objects = label_code_line(script, script[i], white_list, black_list, quantum_objects, line_labels)
-        logging.debug("Computed label %s: for line %s" % (line_label, repr(script[i].dumps())))
+        line_label, quantum_objects = label_code_line(script, script[i], white_list, black_list, quantum_objects,
+                                                      line_labels)
+        logging.debug("%s --> %s" % (repr(script[i].dumps()), line_label))
         line_labels[i] = line_label
 
-    logging.debug("All labels: %s" % line_labels)
+    splitting_labels = apply_threshold(script, line_labels)
 
-    line_labels = np.array(line_labels, dtype=object)
-    quantum_label_indices = np.where(line_labels == Labels.QUANTUM)[0]
-
-    logging.debug("Start relabeling based on threshold=%s" % app.config["SPLITTING_THRESHOLD"])
-    splitting_labels = []
-    # check if first label has preceding classical part bigger than threshold and relabel if not
-    if quantum_label_indices[0] >= app.config["SPLITTING_THRESHOLD"]:
-        splitting_labels.extend(line_labels[:quantum_label_indices[0] + 1])
-        previous_quantum_index = quantum_label_indices[0]
-    else:
-        for x in range(quantum_label_indices[0] + 1):
-            splitting_labels.append(Labels.QUANTUM)
-        previous_quantum_index = quantum_label_indices[0]
-
-    # relabel if distance between previous and current quantum index is larger than threshold
-    for current_quantum_index in quantum_label_indices[1:len(quantum_label_indices)]:
-        logging.debug('Current quantum index: %s' % current_quantum_index)
-        logging.debug('Previous quantum index: %s' % previous_quantum_index)
-
-        # check if distance between previous and current quantum index is larger than threshold
-        if current_quantum_index - previous_quantum_index <= app.config["SPLITTING_THRESHOLD"]:
-            logging.debug('Relabeling to avoid split!')
-            for x in range(previous_quantum_index, current_quantum_index):
-                splitting_labels.append(Labels.QUANTUM)
-        else:
-            logging.debug('Copy existing labels!')
-            splitting_labels.extend(line_labels[previous_quantum_index + 1:current_quantum_index + 1])
-
-        # update previous quantum index
-        previous_quantum_index = current_quantum_index
-
-    # check if last label has more follow-up lines than threshold and relabel if not
-    if len(quantum_label_indices) > 0 and (len(line_labels) - previous_quantum_index) > app.config["SPLITTING_THRESHOLD"]:
-        logging.debug('Last quantum part (index %d) has more follow up lines than threshold' % previous_quantum_index)
-        splitting_labels.extend(line_labels[previous_quantum_index + 1:len(line_labels)])
-    else:
-        logging.debug('Last quantum part (index %d) has less or equal follow up lines than threshold' % quantum_label_indices[-1])
-        for x in range(len(line_labels) - previous_quantum_index - 1):
-            splitting_labels.append(Labels.QUANTUM)
-
-    logging.info('Final splitting labels for method %s: %s' % (script.name, splitting_labels))
-
-    #    line_labels[script.name] = Labels.QUANTUM
-
-    return line_labels
-
-
-def get_all_external_variables_of_code_block(code_block):
-    initialized_variables = []
-    external_variables = []
-    for line in code_block:
-        created_variables, referenced_variables = get_all_variables_of_line(line)
-        # check if referenced variables of line have been initialized before
-        # add to external_variables if not
-        for referenced_variable in referenced_variables:
-            if referenced_variable not in initialized_variables:
-                external_variables.append(referenced_variable)
-        initialized_variables.extend(referenced_variables)
-
-    return external_variables
-
-
-def get_all_variables_of_line(line):
-    created_variables = []
-    referenced_variables = []
-
-    if line.type == "assignment":
-        if line.target.type == 'tuple':
-            for variable in line.target.value:
-                created_variables.append(variable.value)
-        else:
-            created_variables.append(line.target.value)
-
-    # TODO: Get used variables
-    # TODO: What should we do with method invocations?
-
-    return created_variables, referenced_variables
-
-
-def extract_method(code_block):
-    logging.info("Extract code block to separate function...")
-
-    # create method name
-    letters = string.ascii_lowercase
-    method_name = ''.join(random.choice(letters) for i in range(10))
-
-    # create parameters list
-    variables = get_all_external_variables_of_code_block(code_block)
-    parameters = ",".join(variables)
-
-    # create new def node
-    create_str = "def extracted_method_" + method_name + "(" + parameters + "):"
-
-    # add lines to def node
-    for line in code_block:
-        create_str += "\n    " + str(line.dumps())
-
-    return RedBaron(create_str)
-
-
-def split_code_block(root_baron, method_baron, splitting_labels):
-    logging.info('Break up code block into several parts based on final labels:')
-    for i in range(len(method_baron.value)):
-        if method_baron.value[i].type != "endl":
-            logging.debug("[%i] %s [%s]" % (i, method_baron.value[i], splitting_labels[i]))
-
-    to_extract = []
-    result_definitions = []
-    for i in range(len(splitting_labels)):
-        if len(to_extract) == 0:
-            logging.debug("Start new block")
-        if method_baron.value[i].type == "endl":
-            continue
-        logging.debug('Add %s to current block' % method_baron.value[i].dumps())
-        to_extract.append(method_baron.value[i])
-        # for very last element or when next elements label is different
-        if i == len(splitting_labels)-1 or splitting_labels[i+1] != splitting_labels[i]:
-            new_method = extract_method(to_extract)
-            logging.debug("Created method: %s" % repr(new_method.dumps()))
-            result_definitions.append(new_method)
-            to_extract = []
+    return splitting_labels
 
 
 def label_code_line(root_baron, line_baron, white_list, black_list, quantum_objects, method_labels):
-    return Labels.QUANTUM, quantum_objects
+    logging.debug('Label code line: %s...' % repr(line_baron.dumps()))
+
+    # handle imports
+    if line_baron.type == 'import' or line_baron.type == 'from_import':
+        return Labels.OTHER, quantum_objects
 
     # handle empty lines
     if line_baron.type == 'endl':
-        return Labels.CLASSICAL, quantum_objects
+        return Labels.OTHER, quantum_objects
 
-    logging.info('Label code line: %s' % line_baron.dumps())
+    # handle comments
+    if line_baron.type == 'comment':
+        return Labels.OTHER, quantum_objects
 
     # handle classical instructions
-    if line_baron.type == 'if' or line_baron.type == 'while' or line_baron.type == 'comment' \
+    if line_baron.type == 'if' or line_baron.type == 'while' \
             or line_baron.type == 'print' or line_baron.type == 'ifelseblock' or line_baron.type == 'tuple' \
             or line_baron.type == 'int' or line_baron.type == "list":
         logging.info('Basic Type. --> Classical!')
-        return Labels.CLASSICAL, quantum_objects
+        return Labels.CLASSIC, quantum_objects
 
     # handle atomtrailers, i.e., method invocations and other basic elements
     if line_baron.type == 'atomtrailers':
@@ -184,7 +69,8 @@ def label_code_line(root_baron, line_baron, white_list, black_list, quantum_obje
         logging.debug('Object on the left side of the atomtrailer node: %s' % left_most_identifier)
 
         # check if identifier is contained in the list with assigned quantum objects
-        logging.debug('Check if %s is contained in %s: %s' % (str(line_baron.value[0]), quantum_objects, str(line_baron.value[0]) in quantum_objects))
+        logging.debug('Check if %s is contained in %s: %s' % (
+            str(line_baron.value[0]), quantum_objects, str(line_baron.value[0]) in quantum_objects))
         if str(line_baron.value[0]) in quantum_objects:
             logging.debug('Object already assigned as QUANTUM object!')
             return Labels.QUANTUM, quantum_objects
@@ -200,7 +86,7 @@ def label_code_line(root_baron, line_baron, white_list, black_list, quantum_obje
         if uses_quantum_import(line_baron.value[0], root_baron, white_list, black_list):
             return Labels.QUANTUM, quantum_objects
         else:
-            return Labels.CLASSICAL, quantum_objects
+            return Labels.CLASSIC, quantum_objects
 
     # handle assignments
     if line_baron.type == 'assignment':
@@ -214,7 +100,8 @@ def label_code_line(root_baron, line_baron, white_list, black_list, quantum_obje
                 right_element = line_baron.value[i]
                 left_element = line_baron.target[i]
                 # recursively get labels for right part
-                assignment_labels = label_code_line(root_baron, right_element, white_list, black_list, quantum_objects, method_labels)
+                assignment_labels = label_code_line(root_baron, right_element, white_list, black_list, quantum_objects,
+                                                    method_labels)
                 logging.debug('Assignment_labels: %s' % str(assignment_labels))
                 if Labels.QUANTUM in assignment_labels:
                     # if element on the right is from a quantum module then the target variable is quantum as well
@@ -225,44 +112,18 @@ def label_code_line(root_baron, line_baron, white_list, black_list, quantum_obje
         # handle single element assignments
         elif line_baron.target.type == 'name':
             logging.debug('Found a single assignment. Check if right side is Quantum...')
-            assignment_labels = label_code_line(root_baron, line_baron.value, white_list, black_list, quantum_objects, method_labels)
+            assignment_labels = label_code_line(root_baron, line_baron.value, white_list, black_list, quantum_objects,
+                                                method_labels)
             # if assignment assigns a quantum object, the corresponding variable is stored
             if Labels.QUANTUM in assignment_labels:
                 # if element on the right is from a quantum module then the target variable is quantum as well
-                logging.debug('"%s" is QUANTUM, thus, "%s" is QUANTUM as well.' % (line_baron.value, line_baron.target.value))
+                logging.debug(
+                    '"%s" is QUANTUM, thus, "%s" is QUANTUM as well.' % (line_baron.value, line_baron.target.value))
                 quantum_objects.append(line_baron.target.value)
             return assignment_labels, quantum_objects
 
     logging.error('Unexpected node type received: %s' % line_baron.type)
-    return Labels.CLASSICAL, quantum_objects
-
-
-def is_in_knowledge_base(package_orig, knowledge_base):
-    logging.info('Check if %s is part of %s' % (package_orig, knowledge_base))
-
-    # if any parameter is not defined, log warning and return False
-    if package_orig is None or knowledge_base is None:
-        logging.warning("Search for %s in %s is invalid since one of both is None." % (package_orig, knowledge_base))
-        return False
-
-    # if search term is empty, return False
-    if not package_orig:
-        logging.debug("Search for empty list in knowledge base --> return False")
-        return False
-
-    # copy array to work on a copy instead of the original
-    package_copy = package_orig[:]
-
-    # Search in KB iteratively adding elements from package_orig to search term.
-    # E.g.: packages_copy =  ['first','second','third']
-    # Start to search for 'first' in KB. Continue with 'first.second', and finally search for 'first.second.third' in KB
-    search_list = []
-    while len(package_copy) > 0:
-        search_list.append(package_copy.pop(0))
-        if ".".join(search_list) in knowledge_base:
-            return True
-
-    return False
+    return Labels.CLASSIC, quantum_objects
 
 
 def uses_quantum_import(line_value, root_baron, white_list, black_list):
@@ -307,6 +168,63 @@ def get_import_statement(line_value, root_baron):
     return []
 
 
-def split_method(method_baron, start_index, end_index):
-    logging.info('Splitting method from index %d to %d' % (start_index, end_index))
-    # TODO
+def is_in_knowledge_base(package_orig, knowledge_base):
+    logging.info('Check if %s is part of %s' % (package_orig, knowledge_base))
+
+    # if any parameter is not defined, log warning and return False
+    if package_orig is None or knowledge_base is None:
+        logging.warning("Search for %s in %s is invalid since one of both is None." % (package_orig, knowledge_base))
+        return False
+
+    # if search term is empty, return False
+    if not package_orig:
+        logging.debug("Search for empty list in knowledge base --> return False")
+        return False
+
+    # copy array to work on a copy instead of the original
+    package_copy = package_orig[:]
+
+    # Search in KB iteratively adding elements from package_orig to search term.
+    # E.g.: packages_copy =  ['first','second','third']
+    # Start to search for 'first' in KB. Continue with 'first.second', and finally search for 'first.second.third' in KB
+    search_list = []
+    while len(package_copy) > 0:
+        search_list.append(package_copy.pop(0))
+        if ".".join(search_list) in knowledge_base:
+            return True
+
+    return False
+
+
+def apply_threshold(script, line_labels):
+    logging.debug("Start relabeling with threshold=%s" % app.config["SPLITTING_THRESHOLD"])
+    splitting_labels = line_labels[:]
+
+    if Labels.CLASSIC not in line_labels:
+        logging.warning("No relabeling necessary since it does not contain any classical parts!")
+        return splitting_labels
+    if Labels.QUANTUM not in line_labels:
+        logging.warning("No relabeling necessary since it does not contain any quantum parts!")
+        return splitting_labels
+
+    # calculate number of classical lines before each quantum block and relabel if it is smaller than threshold
+    classical_indices = []
+    for i in range(len(script)):
+        if line_labels[i] == Labels.QUANTUM:
+            relabel_if_necessary(classical_indices, splitting_labels)
+            classical_indices = []
+        if line_labels[i] == Labels.CLASSIC:
+            classical_indices.append(i)
+    # calculate number of trailing classical lines and relabel if it is smaller than threshold
+    relabel_if_necessary(classical_indices, splitting_labels)
+
+    logging.debug("Labels without threshold %s" % line_labels)
+    logging.debug("Labels with threshold(%s) %s" % (app.config["SPLITTING_THRESHOLD"], splitting_labels))
+
+    return splitting_labels
+
+
+def relabel_if_necessary(classical_indices, splitting_labels):
+    if 0 < len(classical_indices) < app.config["SPLITTING_THRESHOLD"]:
+        for classical_index in classical_indices:
+            splitting_labels[classical_index] = Labels.QUANTUM
