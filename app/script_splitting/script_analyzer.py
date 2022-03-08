@@ -31,9 +31,13 @@ def get_labels(script, white_list, black_list):
         logging.debug('Label code line: %s...' % repr(line_baron.dumps()))
 
         # handle imports, comments, and black lines
-        if line_baron.type in ['import', 'from_import', 'endl', 'comment']:
-            logging.debug('Import, comment, or black Line --> OTHER')
-            label = Labels.OTHER
+        if line_baron.type in ['import', 'from_import']:
+            logging.debug('Found import --> IMPORT')
+            label = Labels.IMPORTS
+
+        elif line_baron.type in ['endl', 'comment']:
+            logging.debug('Empty Line or Comment --> NO_CODE')
+            label = Labels.NO_CODE
 
         # handle basic classical instructions
         elif line_baron.type in ['if', 'while', 'print', 'ifelseblock', 'tuple', 'int', 'list']:
@@ -55,7 +59,7 @@ def get_labels(script, white_list, black_list):
 
         else:
             logging.error('Unexpected node type received: %s' % line_baron.type)
-            label = Labels.OTHER
+            label = Labels.NO_CODE
 
         line_labels.append(label)
 

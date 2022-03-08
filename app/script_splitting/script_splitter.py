@@ -18,13 +18,39 @@
 # ******************************************************************************
 
 from redbaron import RedBaron
+from app.script_splitting.Labels import Labels
 import logging
 import random
 import string
 
 
-def split_script(file, labels):
-    pass
+def split_script(script, splitting_labels):
+    for i in range(len(script)):
+        print("%s\t%s" % (splitting_labels[i], repr(script[i].dumps())))
+
+    to_extract = []
+    result_definitions = []
+    for i in range(len(splitting_labels)):
+        if splitting_labels[i] == Labels.IMPORTS or script[i].type == "endl":
+            continue
+        if len(to_extract) == 0:
+            logging.debug("Start new block")
+        logging.debug('Add %s to current block' % repr(script[i].dumps()))
+        to_extract.append(script[i])
+        # for very last element or when next elements label is different
+        if is_end_of_code_block(i, splitting_labels):
+            new_method = extract_method(to_extract)
+            print(new_method.dumps())
+            logging.debug("Created method: %s" % repr(new_method.dumps()))
+            result_definitions.append(new_method)
+            to_extract = []
+
+
+def is_end_of_code_block(i, splitting_labels):
+    return i == len(splitting_labels) - 1 or \
+           (splitting_labels[i + 1] != splitting_labels[i]
+            and not splitting_labels[i] == Labels.NO_CODE
+            and not splitting_labels[i + 1] == Labels.NO_CODE)
 
 
 def get_all_external_variables_of_code_block(code_block):
