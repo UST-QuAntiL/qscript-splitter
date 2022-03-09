@@ -32,16 +32,18 @@ def split_script(script, splitting_labels):
     # start building result_script with preamble
     result_script = script[0:code_blocks[0][0]]
 
+    all_possible_return_variables = []
     for block in code_blocks:
         first = block[0]
         last = block[-1]
         code_block = script[first:last+1]
 
+        # compute list of parameters
+        parameters = compute_parameters(code_block, all_possible_return_variables)
+
         # compute list of return variables
         return_variables = compute_return_variables(block, script)
-
-        # compute list of parameters
-        parameters = compute_parameters(code_block)
+        all_possible_return_variables.extend(return_variables)
 
         # generate new method from code block and append to result script
         method_name = "function_" + str(first) + "to" + str(last)
@@ -90,7 +92,6 @@ def compute_return_variables(block_indices, script):
     first = block_indices[0]
     last = block_indices[-1]
     code_block = script[first:last+1]
-    print("block", code_block)
     remaining_block = []
     if len(script) > last+1:
         remaining_block = script[last+1:]
@@ -101,52 +102,70 @@ def compute_return_variables(block_indices, script):
             initialized_variables.append(str(line.target.name))
 
     result = []
-    print("variables %s" % initialized_variables)
     for line in remaining_block:
         for variable in initialized_variables:
-            if is_used_in_line(variable, line):
-                if str(variable) not in result:
-                    result.append(str(variable))
+            if is_used_in_line(variable, line) and str(variable) not in result:
+                result.append(str(variable))
 
     return result
 
 
 def is_used_in_line(variable, line):
     found = line.find_all("NameNode", value=variable)
-    # TODO: NameNode includes function calls as well, thus, only search for variables
+    # TODO: NameNode includes function calls as well, thus, only search for variables.
+    #  The current implementation, however, might return unnecessary variables as well.
     return len(found) > 0
 
 
-def compute_parameters(code_block):
-    initialized_variables = []
-    external_variables = []
+def compute_parameters(code_block, all_possible_return_variables):
+    parameters = []
     for line in code_block:
-        created_variables, referenced_variables = get_all_variables_of_line(line)
-        # check if referenced variables of line have been initialized before
-        # add to external_variables if not
-        for referenced_variable in referenced_variables:
-            if referenced_variable not in initialized_variables:
-                external_variables.append(referenced_variable)
-        initialized_variables.extend(referenced_variables)
+        if line.type == "assignment":
+            param_list = compute_parameters(line.value, all_possible_return_variables)
+            for element in param_list:
+                if element not in parameters:
+                    parameters.append(element)
+            continue
+        if line.type in ['comment', 'endl', 'import']:
+            continue
+        for variable in all_possible_return_variables:
+            if is_used_in_line(variable, line) and str(variable) not in parameters:
+                parameters.append(str(variable))
 
-    return external_variables
+    return parameters
 
 
-def get_all_variables_of_line(line):
-    created_variables = []
-    referenced_variables = []
+def test(line, variables):
+    used_variables = []
+    for variable in variables:
+        found = line.find_all("NameNode", value=variable)
+        if len(found) > 0:
+            used_variables.append(variable)
+    return used_variables
 
-    if line.type == "assignment":
-        if line.target.type == 'tuple':
-            for variable in line.target.value:
-                created_variables.append(variable.value)
-        else:
-            created_variables.append(line.target.value)
 
-    # TODO: Get used variables
-    # TODO: What should we do with method invocations?
+def get_all_variables(node):
+    if node.type in ["comment", "endl", "string", "int", "name"]:
+        return []
+    elif node.type == "assignment":
+        right_side = node.value
+        print("assignment, try %s" % right_side)
+        return get_all_variables(right_side)
+    elif node.type == "atomtrailers":
+        variables = [str(node[0].value)]
+        for node in node.value:
+            variables.extend(get_all_variables(node))
+        return variables
+    elif node.type == "call":
+        for call_argument in node.value:
+            return get_all_variables(call_argument)
+    elif node.type == "call_argument":
+        return get_all_variables(node.value)
+    elif node.type == "print":
+        print('Do something')
 
-    return created_variables, referenced_variables
+    print("xxx", node.type)
+    return []
 
 
 def create_method(code_block, method_name, parameters, return_variables):
