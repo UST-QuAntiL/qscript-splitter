@@ -26,7 +26,7 @@ def split_script(script, splitting_labels):
     for i in range(len(script)):
         logging.debug("%s: %s" % (splitting_labels[i], repr(script[i].dumps())))
 
-    code_blocks = identify_code_blocks2(script, splitting_labels)
+    code_blocks = identify_code_blocks(script, splitting_labels)
     print(code_blocks)
 
     # start building result_script with preamble
@@ -58,7 +58,7 @@ def split_script(script, splitting_labels):
 
 
 
-def identify_code_blocks2(script, splitting_labels):
+def identify_code_blocks(script, splitting_labels):
     list_of_all_code_block_indices = []
     code_block_indices = []
     current_label = None
@@ -84,35 +84,6 @@ def identify_code_blocks2(script, splitting_labels):
     # add last code block
     list_of_all_code_block_indices.append(code_block_indices[:])
     return list_of_all_code_block_indices
-
-
-def identify_code_blocks(script, splitting_labels):
-    all_code_blocks = []
-    code_block = []
-    current_label = None
-    for i in range(len(splitting_labels)):
-        label = splitting_labels[i]
-        line = script[i]
-        # skip imports
-        if label == Labels.IMPORTS:
-            continue
-        # add empty lines to code block, too
-        if label == Labels.NO_CODE:
-            code_block.append(line)
-            continue
-        # tag label of current block
-        if current_label is None:
-            current_label = label
-        # start new code block if label changes
-        if label != current_label:
-            current_label = label
-            all_code_blocks.append(code_block[:])
-            code_block = []
-        # add line to code block
-        code_block.append(line)
-    # add last code block
-    all_code_blocks.append(code_block[:])
-    return all_code_blocks
 
 
 def compute_return_variables(code_block):
