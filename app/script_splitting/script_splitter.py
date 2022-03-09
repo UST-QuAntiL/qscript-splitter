@@ -27,7 +27,7 @@ def split_script(script, splitting_labels):
         logging.debug("%s: %s" % (splitting_labels[i], repr(script[i].dumps())))
 
     code_blocks = identify_code_blocks(splitting_labels)
-    print(code_blocks)
+    logging.debug("Code block indices: %s" % code_blocks)
 
     # start building result_script with preamble
     result_script = script[0:code_blocks[0][0]]
@@ -40,10 +40,12 @@ def split_script(script, splitting_labels):
 
         # compute list of parameters
         parameters = compute_parameters(code_block, all_possible_return_variables)
+        logging.info("Call arguments for code block %s: %s" % (block, parameters))
 
         # compute list of return variables
         return_variables = compute_return_variables(block, script)
         all_possible_return_variables.extend(return_variables)
+        logging.info("Return arguments for code block %s: %s" % (block, return_variables))
 
         # generate new method from code block and append to result script
         method_name = "function_" + str(first) + "to" + str(last)
@@ -55,9 +57,8 @@ def split_script(script, splitting_labels):
         if len(return_variables) > 0:
             method_call += ", ".join(return_variables) + " = "
         method_call += method_name + "(" + ",".join(parameters) + ")"
+        logging.debug("Insert method call for created method: %s" % method_call)
         result_script.append(RedBaron(method_call)[0])
-
-    print(result_script.dumps())
 
 
 def identify_code_blocks(splitting_labels):
@@ -135,41 +136,8 @@ def compute_parameters(code_block, all_possible_return_variables):
     return parameters
 
 
-def test(line, variables):
-    used_variables = []
-    for variable in variables:
-        found = line.find_all("NameNode", value=variable)
-        if len(found) > 0:
-            used_variables.append(variable)
-    return used_variables
-
-
-def get_all_variables(node):
-    if node.type in ["comment", "endl", "string", "int", "name"]:
-        return []
-    elif node.type == "assignment":
-        right_side = node.value
-        print("assignment, try %s" % right_side)
-        return get_all_variables(right_side)
-    elif node.type == "atomtrailers":
-        variables = [str(node[0].value)]
-        for node in node.value:
-            variables.extend(get_all_variables(node))
-        return variables
-    elif node.type == "call":
-        for call_argument in node.value:
-            return get_all_variables(call_argument)
-    elif node.type == "call_argument":
-        return get_all_variables(node.value)
-    elif node.type == "print":
-        print('Do something')
-
-    print("xxx", node.type)
-    return []
-
-
 def create_method(code_block, method_name, parameters, return_variables):
-    logging.info("Extract code block to separate function...")
+    logging.info("Extract code block to separate function: %s" % method_name)
 
     # create new def node
     create_str = "def " + method_name + "(" + ",".join(parameters) + "):"
