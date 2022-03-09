@@ -137,6 +137,7 @@ def compute_parameters(code_block, all_possible_return_variables):
 
 
 def create_method(code_block, method_name, parameters, return_variables):
+    # TODO: work on nodes instead of strings to have indentation correct
     logging.info("Extract code block to separate function: %s" % method_name)
 
     # create new def node

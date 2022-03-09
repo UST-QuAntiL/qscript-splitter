@@ -31,11 +31,8 @@ def split_qc_script():
     """Put qc srcipt split job in queue. Return location of the later result."""
 
     # extract required input data
-    if not request.form.get('script'):
-        print('Input script is missing!')
-        abort(400)
     script = request.files['script']
-    app.logger.info('Received request for hybrid program generation...')
+    app.logger.info('Received request for splitting script...')
 
     # store file with required programs in local file and forward path to the workers
     directory = app.config["UPLOAD_FOLDER"]

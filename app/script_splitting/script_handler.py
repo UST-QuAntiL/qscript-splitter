@@ -30,6 +30,7 @@ logging.basicConfig(filename='logger.log', encoding='utf-8', level=logging.DEBUG
 
 
 def split_qc_script(script):
+    print("start splitting")
     # load white and black lists
     knowledge_base_path = 'script_splitting/knowledge_base.json'
     logging.info('Load Knowledge Base: %s' % knowledge_base_path)

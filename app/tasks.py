@@ -21,49 +21,48 @@ from os import listdir
 from tempfile import mkdtemp
 
 from app import db, app
-from app.hybrid_program_generation import hybrid_program_generator
 from rq import get_current_job
 
-from app.hybrid_program_generation.zip_handler import search_python_file
 from app.result_model import Result
 import zipfile
 import os
 import urllib.request
 
 
-def generate_hybrid_program(beforeLoop, afterLoop, loopCondition, requiredProgramsUrl):
+def split_qc_script(qcScriptUrl):
     """Generate the hybrid program for the given candidate and save the result in db"""
+    app.logger.info('Start task split_qc_script...')
     job = get_current_job()
 
     # get URL to the ZIP file with the required programs
-    url = 'http://' + os.environ.get('FLASK_RUN_HOST') + ':' + os.environ.get('FLASK_RUN_PORT') + requiredProgramsUrl
+    url = 'http://' + os.environ.get('FLASK_RUN_HOST') + ':' + os.environ.get('FLASK_RUN_PORT') + qcScriptUrl
 
     # download the ZIP file
     app.logger.info('Downloading required programs from: ' + str(url))
-    downloadPath, response = urllib.request.urlretrieve(url, "requiredPrograms.zip")
+    download_path, response = urllib.request.urlretrieve(url, "requiredPrograms.zip")
 
     # dict to store task IDs and the paths to the related programs
-    taskIdProgramMap = {}
+    task_id_program_map = {}
 
     # extract the zip file
-    with zipfile.ZipFile(downloadPath, "r") as zip_ref:
+    with zipfile.ZipFile(download_path, "r") as zip_ref:
         directory = mkdtemp()
         app.logger.info('Extracting to directory: ' + str(directory))
         zip_ref.extractall(directory)
 
         # zip contains one folder per task within the candidate
-        zipContents = [f for f in listdir(directory)]
-        for zipContent in zipContents:
+        zip_contents = [f for f in listdir(directory)]
+        for zipContent in zip_contents:
             app.logger.info('Searching for program related to task with ID: ' + str(zipContent))
 
             # search for Python file and store with ID if found
-            pythonFile = search_python_file(os.path.join(directory, zipContent))
-            if pythonFile is not None:
-                taskIdProgramMap[zipContent] = pythonFile
+            python_file = search_python_file(os.path.join(directory, zipContent))
+            if python_file is not None:
+                task_id_program_map[zipContent] = python_file
 
     # create the hybrid program and a corresponding invoking agent
     programCreationResult = hybrid_program_generator.create_hybrid_program(beforeLoop, afterLoop, loopCondition,
-                                                                           taskIdProgramMap)
+                                                                           task_id_program_map)
 
     # insert results into job object
     result = Result.query.get(job.get_id())

@@ -23,7 +23,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from redis import Redis
 import rq
-from app import Config
+from app import config
 import logging
 
 app = Flask(__name__)
@@ -34,5 +34,5 @@ migrate = Migrate(app, db)
 from app import routes, result_model, errors
 
 app.redis = Redis.from_url(app.config['REDIS_URL'])
-app.queue = rq.Queue('qiskit-runtime-handler', connection=app.redis, default_timeout=3600)
+app.queue = rq.Queue('script-splitting-handler', connection=app.redis, default_timeout=3600)
 app.logger.setLevel(logging.DEBUG)
