@@ -38,7 +38,7 @@ def split_script(script, splitting_labels):
         code_block = script[first:last+1]
 
         # compute list of return variables
-        return_variables = compute_return_variables(code_block)
+        return_variables = compute_return_variables(block, script)
 
         # compute list of parameters
         parameters = compute_parameters(code_block)
@@ -86,9 +86,35 @@ def identify_code_blocks(splitting_labels):
     return list_of_all_code_block_indices
 
 
-def compute_return_variables(code_block):
-    # TODO
-    return ["a", "b", "c"]
+def compute_return_variables(block_indices, script):
+    first = block_indices[0]
+    last = block_indices[-1]
+    code_block = script[first:last+1]
+    print("block", code_block)
+    remaining_block = []
+    if len(script) > last+1:
+        remaining_block = script[last+1:]
+
+    initialized_variables = []
+    for line in code_block:
+        if line.type == "assignment":
+            initialized_variables.append(str(line.target.name))
+
+    result = []
+    print("variables %s" % initialized_variables)
+    for line in remaining_block:
+        for variable in initialized_variables:
+            if is_used_in_line(variable, line):
+                if str(variable) not in result:
+                    result.append(str(variable))
+
+    return result
+
+
+def is_used_in_line(variable, line):
+    found = line.find_all("NameNode", value=variable)
+    # TODO: NameNode includes function calls as well, thus, only search for variables
+    return len(found) > 0
 
 
 def compute_parameters(code_block):
@@ -123,7 +149,7 @@ def get_all_variables_of_line(line):
     return created_variables, referenced_variables
 
 
-def create_method(code_block, method_name, parameters, needed_variables):
+def create_method(code_block, method_name, parameters, return_variables):
     logging.info("Extract code block to separate function...")
 
     # create new def node
@@ -134,8 +160,8 @@ def create_method(code_block, method_name, parameters, needed_variables):
         create_str += "\n    " + str(line.dumps())
 
     # add return statement
-    if len(needed_variables) > 0:
-        create_str += "\n    " + "return " + ", ".join(needed_variables)
+    if len(return_variables) > 0:
+        create_str += "\n    " + "return " + ", ".join(return_variables)
 
     # return first node which is the complete def node
     return RedBaron(create_str)[0]
