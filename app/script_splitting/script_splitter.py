@@ -26,19 +26,16 @@ def split_script(script, splitting_labels):
     for i in range(len(script)):
         logging.debug("%s: %s" % (splitting_labels[i], repr(script[i].dumps())))
 
-    code_blocks = identify_code_blocks(script, splitting_labels)
+    code_blocks = identify_code_blocks(splitting_labels)
     print(code_blocks)
 
     # start building result_script with preamble
     result_script = script[0:code_blocks[0][0]]
 
-    counter = 0
-    created_methods = []
     for block in code_blocks:
         first = block[0]
         last = block[-1]
         code_block = script[first:last+1]
-        counter += 1
 
         # compute list of return variables
         return_variables = compute_return_variables(code_block)
@@ -47,18 +44,21 @@ def split_script(script, splitting_labels):
         parameters = compute_parameters(code_block)
 
         # generate new method from code block and append to result script
-        created_method = create_method(code_block, counter, parameters, return_variables)
+        method_name = "function_" + str(first) + "to" + str(last)
+        created_method = create_method(code_block, method_name, parameters, return_variables)
         result_script.append(created_method)
 
         # generate method call from method and append to result script
-        method_call = ", ".join(return_variables) + " = " + created_method.name + "(" + ",".join(parameters) + ")"
+        method_call = ""
+        if len(return_variables) > 0:
+            method_call += ", ".join(return_variables) + " = "
+        method_call += method_name + "(" + ",".join(parameters) + ")"
         result_script.append(RedBaron(method_call)[0])
 
     print(result_script.dumps())
 
 
-
-def identify_code_blocks(script, splitting_labels):
+def identify_code_blocks(splitting_labels):
     list_of_all_code_block_indices = []
     code_block_indices = []
     current_label = None
@@ -123,11 +123,8 @@ def get_all_variables_of_line(line):
     return created_variables, referenced_variables
 
 
-def create_method(code_block, counter, parameters, needed_variables):
+def create_method(code_block, method_name, parameters, needed_variables):
     logging.info("Extract code block to separate function...")
-
-    # create method name
-    method_name = 'function_' + str(counter)
 
     # create new def node
     create_str = "def " + method_name + "(" + ",".join(parameters) + "):"
