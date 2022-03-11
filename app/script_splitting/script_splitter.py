@@ -17,17 +17,17 @@
 #  limitations under the License.
 # ******************************************************************************
 
+from app import app
 from redbaron import RedBaron
 from app.script_splitting.Labels import Labels
-import logging
 
 
 def split_script(script, splitting_labels):
     for i in range(len(script)):
-        logging.debug("%s: %s" % (splitting_labels[i], repr(script[i].dumps())))
+        app.logger.debug("%s: %s" % (splitting_labels[i], repr(script[i].dumps())))
 
     code_blocks = identify_code_blocks(splitting_labels)
-    logging.debug("Code block indices: %s" % code_blocks)
+    app.logger.debug("Code block indices: %s" % code_blocks)
 
     # start building result_script with preamble
     result_script = script[0:code_blocks[0][0]]
@@ -40,12 +40,12 @@ def split_script(script, splitting_labels):
 
         # compute list of parameters
         parameters = compute_parameters(code_block, all_possible_return_variables)
-        logging.info("Call arguments for code block %s: %s" % (block, parameters))
+        app.logger.info("Call arguments for code block %s: %s" % (block, parameters))
 
         # compute list of return variables
         return_variables = compute_return_variables(block, script)
         all_possible_return_variables.extend(return_variables)
-        logging.info("Return arguments for code block %s: %s" % (block, return_variables))
+        app.logger.info("Return arguments for code block %s: %s" % (block, return_variables))
 
         # generate new method from code block and append to result script
         method_name = "function_" + str(first) + "to" + str(last)
@@ -57,7 +57,7 @@ def split_script(script, splitting_labels):
         if len(return_variables) > 0:
             method_call += ", ".join(return_variables) + " = "
         method_call += method_name + "(" + ",".join(parameters) + ")"
-        logging.debug("Insert method call for created method: %s" % method_call)
+        app.logger.debug("Insert method call for created method: %s" % method_call)
         result_script.append(RedBaron(method_call)[0])
 
 
@@ -138,7 +138,7 @@ def compute_parameters(code_block, all_possible_return_variables):
 
 def create_method(code_block, method_name, parameters, return_variables):
     # TODO: work on nodes instead of strings to have indentation correct
-    logging.info("Extract code block to separate function: %s" % method_name)
+    app.logger.info("Extract code block to separate function: %s" % method_name)
 
     # create new def node
     create_str = "def " + method_name + "(" + ",".join(parameters) + "):"

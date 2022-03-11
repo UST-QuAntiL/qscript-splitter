@@ -23,36 +23,32 @@ from app.script_splitting.flattener import flatten
 from app.script_splitting.script_analyzer import get_labels
 from app.script_splitting.script_splitter import split_script
 import json
-import logging
-
-
-logging.basicConfig(filename='logger.log', encoding='utf-8', level=logging.DEBUG)
 
 
 def split_qc_script(script):
     print("start splitting")
     # load white and black lists
     knowledge_base_path = 'script_splitting/knowledge_base.json'
-    logging.info('Load Knowledge Base: %s' % knowledge_base_path)
+    app.logger.info('Load Knowledge Base: %s' % knowledge_base_path)
     with open(knowledge_base_path, 'r') as knowledge_base:
         knowledge_base_json = json.load(knowledge_base)
     white_list = knowledge_base_json['white_list']
     black_list = knowledge_base_json['black_list']
-    logging.debug('Number of white list rules: %s' % len(white_list))
-    logging.debug('Number of black list rules: %s' % len(black_list))
+    app.logger.debug('Number of white list rules: %s' % len(white_list))
+    app.logger.debug('Number of black list rules: %s' % len(black_list))
 
     # RedBaron object containing all information about the script to split
-    logging.info('Load Script: %s' % script)
+    app.logger.info('Load Script: %s' % script)
     with open(script, "r") as source_code:
         qc_script_baron = RedBaron(source_code.read())
 
-    logging.info('Flatten Script')
+    app.logger.info('Flatten Script')
     flattened_file = flatten(qc_script_baron)
 
-    logging.info('Start analyzing script...')
+    app.logger.info('Start analyzing script...')
     labels = get_labels(flattened_file, white_list, black_list)
 
-    logging.info('Start splitting script...')
+    app.logger.info('Start splitting script...')
     split_script(flattened_file, labels)
 
 

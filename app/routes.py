@@ -46,7 +46,7 @@ def split_qc_script():
     app.logger.info('File available via URL: ' + str(url))
 
     # execute job asynchronously
-    job = app.queue.enqueue('app.tasks.split_qc_script', qcScriptUrl=url, job_timeout=18000)
+    job = app.queue.enqueue('app.tasks.qc_script_splitting_task', qc_script_url=url, job_timeout=18000)
     app.logger.info('Added job for qc script splitting to the queue...')
     result = Result(id=job.get_id())
     db.session.add(result)
@@ -74,13 +74,14 @@ def get_result(result_id):
             if not os.path.exists(directory):
                 os.makedirs(directory)
 
+            return "finished"
             # create files and serve as URL
-            programName = os.path.join(directory, 'qc-script-parts-' + result.id + '.zip')
-            with open(programName, 'wb') as file:
-                file.write(result.program)
-
-            return jsonify({'id': result.id, 'complete': result.complete,
-                            'scriptPartsUrl': url_for('download_generated_file', name='qc-script-parts-' + result.id + '.zip')}), 200
+            # programName = os.path.join(directory, 'qc-script-parts-' + result.id + '.zip')
+            # with open(programName, 'wb') as file:
+            #     file.write(result.program)
+            #
+            # return jsonify({'id': result.id, 'complete': result.complete,
+            #                 'scriptPartsUrl': url_for('download_generated_file', name='qc-script-parts-' + result.id + '.zip')}), 200
     else:
         return jsonify({'id': result.id, 'complete': result.complete}), 200
 
