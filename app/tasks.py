@@ -26,19 +26,18 @@ from rq import get_current_job
 from app.result_model import Result
 import os
 import urllib.request
+from app.script_splitting import script_handler
 
 
-def qc_script_splitting_task(qc_script_url):
+def qc_script_splitting_task(qc_script_url, knowledge_base_url):
     app.logger.info('Start task split_qc_script...')
     job = get_current_job()
 
     # get URL to the ZIP file with the required programs
     url = 'http://' + os.environ.get('FLASK_RUN_HOST') + ':' + os.environ.get('FLASK_RUN_PORT') + qc_script_url
+    kb_url = 'http://' + os.environ.get('FLASK_RUN_HOST') + ':' + os.environ.get('FLASK_RUN_PORT') + knowledge_base_url
 
-    # download the ZIP file
-    app.logger.info('Downloading required programs from: %s' % url)
-    with urllib.request.urlopen(url) as f:
-        print(f.read().decode('utf-8'))
+    script_handler.split_qc_script(url, kb_url)
 
     result = Result.query.get(job.get_id())
 

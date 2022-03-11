@@ -27,8 +27,9 @@ class Config(object):
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     REDIS_URL = os.environ.get('REDIS_URL') or 'redis://'
-    UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER') or os.path.join(basedir, 'files')
+    UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER') or os.path.join(basedir, 'uploads')
     RESULT_FOLDER = os.environ.get('RESULT_FOLDER') or os.path.join(basedir, 'generated-files')
+    KNOWLEDGE_BASE_FOLDER = os.environ.get('KNOWLEDGE_BASE_FOLDER') or os.path.join(basedir, 'knowledge_base')
 
     # number of consecutive lines of classical code allowed in quantum parts
     SPLITTING_THRESHOLD = 2

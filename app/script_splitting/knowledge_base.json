@@ -1,4 +1,0 @@
-{
-  "white_list": ["qiskit"],
-  "black_list": ["qiskit.visualization"]
-}

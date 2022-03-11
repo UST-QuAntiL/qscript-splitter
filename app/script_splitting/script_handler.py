@@ -23,31 +23,43 @@ from app.script_splitting.flattener import flatten
 from app.script_splitting.script_analyzer import get_labels
 from app.script_splitting.script_splitter import split_script
 import json
+import os
+import urllib.request
 
 
-def split_qc_script(script):
-    print("start splitting")
-    # load white and black lists
-    knowledge_base_path = 'script_splitting/knowledge_base.json'
-    app.logger.info('Load Knowledge Base: %s' % knowledge_base_path)
-    with open(knowledge_base_path, 'r') as knowledge_base:
-        knowledge_base_json = json.load(knowledge_base)
-    white_list = knowledge_base_json['white_list']
-    black_list = knowledge_base_json['black_list']
-    app.logger.debug('Number of white list rules: %s' % len(white_list))
-    app.logger.debug('Number of black list rules: %s' % len(black_list))
+def split_qc_script(script_url, knowledge_base_url):
+    app.logger.info("Script Handler: Start splitting...")
 
     # RedBaron object containing all information about the script to split
-    app.logger.info('Load Script: %s' % script)
-    with open(script, "r") as source_code:
-        qc_script_baron = RedBaron(source_code.read())
+    with urllib.request.urlopen(script_url) as f:
+        qc_script_baron = RedBaron(f.read().decode('utf-8'))
+        app.logger.error('TEST %s' % len(qc_script_baron))
+    if qc_script_baron is None or len(qc_script_baron) == 0:
+        app.logger.error('Could not load base script... Abort')
+        return
 
+    # Download knowledge base
+    app.logger.info('Downloading knowledge base from: %s' % knowledge_base_url)
+    with urllib.request.urlopen(knowledge_base_url) as knowledge_base_file:
+        knowledge_base_json = json.load(knowledge_base_file)
+        white_list = knowledge_base_json['white_list']
+        black_list = knowledge_base_json['black_list']
+        app.logger.debug('Number of white list rules: %s' % len(white_list))
+        app.logger.debug('Number of black list rules: %s' % len(black_list))
+
+    if knowledge_base_json is None:
+        app.logger.error('Could not load knowledge base... Abort')
+        return
+
+    # Flatten the Script
     app.logger.info('Flatten Script')
     flattened_file = flatten(qc_script_baron)
 
+    # Analyze the flattened script
     app.logger.info('Start analyzing script...')
     labels = get_labels(flattened_file, white_list, black_list)
 
+    # Split the script
     app.logger.info('Start splitting script...')
     split_script(flattened_file, labels)
 

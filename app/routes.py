@@ -45,8 +45,10 @@ def split_qc_script():
     url = url_for('download_uploaded_file', name=os.path.basename(fileName))
     app.logger.info('File available via URL: ' + str(url))
 
+    kb_url = url_for('download_knowledge_base')
+
     # execute job asynchronously
-    job = app.queue.enqueue('app.tasks.qc_script_splitting_task', qc_script_url=url, job_timeout=18000)
+    job = app.queue.enqueue('app.tasks.qc_script_splitting_task', qc_script_url=url, knowledge_base_url=kb_url, job_timeout=18000)
     app.logger.info('Added job for qc script splitting to the queue...')
     result = Result(id=job.get_id())
     db.session.add(result)
@@ -99,3 +101,20 @@ def download_generated_file(name):
 @app.route('/qc-script-splitter/api/v1.0/version', methods=['GET'])
 def version():
     return jsonify({'version': '1.0'})
+
+
+@app.route('/qc-script-splitter/api/v1.0/knowledge-base', methods=['DELETE'])
+def delete_knowledge_base():
+    # TODO
+    pass
+
+
+@app.route('/qc-script-splitter/api/v1.0/knowledge-base', methods=['POST', 'PUT'])
+def upload_knowledge_base():
+    # TODO
+    pass
+
+
+@app.route('/qc-script-splitter/api/v1.0/knowledge-base', methods=['GET'])
+def download_knowledge_base():
+    return send_from_directory(app.config["KNOWLEDGE_BASE_FOLDER"], 'knowledge_base.json')
