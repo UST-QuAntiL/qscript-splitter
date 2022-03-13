@@ -24,37 +24,49 @@ import logging
 import os
 import string
 import random
+import shutil
 
 
 @app.route('/qc-script-splitter/api/v1.0/split-qc-script', methods=['POST'])
 def split_qc_script():
     """Put qc srcipt split job in queue. Return location of the later result."""
 
-    # extract required input data
+    # Clear working directories
+    if app.config['CLEAR_FILES_ON_NEW_REQUEST']:
+        if os.path.exists(app.config['UPLOAD_FOLDER']):
+            app.logger.debug('Delete upload folder %s' % app.config['UPLOAD_FOLDER'])
+            shutil.rmtree(app.config['UPLOAD_FOLDER'])
+        if os.path.exists(app.config['RESULT_FOLDER']):
+            app.logger.debug('Delete result folder %s' % app.config['RESULT_FOLDER'])
+            shutil.rmtree(app.config['RESULT_FOLDER'])
+
+    # Extract required input data
     script = request.files['script']
     app.logger.info('Received request for splitting script...')
 
-    # store file with required programs in local file and forward path to the workers
-    directory = app.config["UPLOAD_FOLDER"]
-    app.logger.info('Storing file comprising required programs at folder: ' + str(directory))
-    if not os.path.exists(directory):
-        os.makedirs(directory)
-    randomString = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))
-    fileName = 'qc-script-' + randomString + '.py'
-    script.save(os.path.join(directory, fileName))
-    url = url_for('download_uploaded_file', name=os.path.basename(fileName))
-    app.logger.info('File available via URL: ' + str(url))
+    # Store file with required script in local file and forward path to the workers
+    upload_folder = app.config["UPLOAD_FOLDER"]
+    app.logger.info('Storing uploaded script at folder: ' + str(upload_folder))
+    if not os.path.exists(upload_folder):
+        os.makedirs(upload_folder)
+    random_string = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))
+    file_name = 'qc-script-' + random_string + '.py'
+    script.save(os.path.join(upload_folder, file_name))
+
+    script_url = url_for('download_uploaded_file', name=os.path.basename(file_name))
+    app.logger.info('File available via URL: ' + str(script_url))
 
     kb_url = url_for('download_knowledge_base')
+    app.logger.info('Knowledge base available via URL: ' + str(kb_url))
 
-    # execute job asynchronously
-    job = app.queue.enqueue('app.tasks.qc_script_splitting_task', qc_script_url=url, knowledge_base_url=kb_url, job_timeout=18000)
+    # Execute job asynchronously
+    job = app.queue.enqueue('app.tasks.qc_script_splitting_task', qc_script_url=script_url, knowledge_base_url=kb_url, job_timeout=18000)
     app.logger.info('Added job for qc script splitting to the queue...')
     result = Result(id=job.get_id())
     db.session.add(result)
     db.session.commit()
 
-    # return location of task object to retrieve final result
+    # Return location of task object to retrieve final result
     logging.info('Returning HTTP response to client...')
     content_location = '/qc-script-splitter/api/v1.0/results/' + result.id
     response = jsonify({'Location': content_location})

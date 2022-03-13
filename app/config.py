@@ -33,3 +33,6 @@ class Config(object):
 
     # number of consecutive lines of classical code allowed in quantum parts
     SPLITTING_THRESHOLD = 2
+
+    # Clear upload and result folders first (for debugging purposes)
+    CLEAR_FILES_ON_NEW_REQUEST = os.environ.get('CLEAR_FILES_ON_NEW_REQUEST') or False
