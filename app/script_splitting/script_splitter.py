@@ -30,7 +30,8 @@ def split_script(script, splitting_labels):
     app.logger.debug("Code block indices: %s" % code_blocks)
 
     # start building result_script with preamble
-    result_script = script[0:code_blocks[0][0]]
+    preamble = script[0:code_blocks[0][0]]
+    result_script = []
 
     extracted_parts = {}
     all_possible_return_variables = []
@@ -52,17 +53,24 @@ def split_script(script, splitting_labels):
         method_name = "function_" + str(first) + "to" + str(last)
         created_method = create_method(code_block, method_name, parameters, return_variables)
         extracted_file_name = method_name + ".py"
-        # % TODO generate better name and file imports
         extracted_parts[extracted_file_name] = created_method
+
+        # TODO move/copy imports to extracted files
+
+        # generate imports into base file
+        app.logger.debug("Insert import to extracted file into base script")
+        preamble.append(RedBaron('from ' + method_name + ' import ' + method_name)[0])
 
         # generate method call from method and append to result script
         method_call = ""
         if len(return_variables) > 0:
             method_call += ", ".join(return_variables) + " = "
-        method_call += method_name + "(" + ",".join(parameters) + ")"
+        method_call += method_name + "(" + ", ".join(parameters) + ")"
         app.logger.debug("Insert method call for created method: %s" % method_call)
         result_script.append(RedBaron(method_call)[0])
-        extracted_parts['base_script.py'] = result_script
+
+    preamble.extend(result_script)
+    extracted_parts['base_script.py'] = preamble
 
     return extracted_parts
 
@@ -147,7 +155,7 @@ def create_method(code_block, method_name, parameters, return_variables):
     app.logger.info("Extract code block to separate function: %s" % method_name)
 
     # create new def node
-    create_str = "def " + method_name + "(" + ",".join(parameters) + "):"
+    create_str = "def " + method_name + "(" + ", ".join(parameters) + "):"
 
     # add lines to def node
     for line in code_block:
