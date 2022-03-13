@@ -71,19 +71,8 @@ def get_result(result_id):
         if result.error:
             return jsonify({'id': result.id, 'complete': result.complete, 'error': result.error}), 200
         else:
-            # create result directory if not existing
-            directory = app.config["RESULT_FOLDER"]
-            if not os.path.exists(directory):
-                os.makedirs(directory)
-
-            return "finished"
-            # create files and serve as URL
-            # programName = os.path.join(directory, 'qc-script-parts-' + result.id + '.zip')
-            # with open(programName, 'wb') as file:
-            #     file.write(result.program)
-            #
-            # return jsonify({'id': result.id, 'complete': result.complete,
-            #                 'scriptPartsUrl': url_for('download_generated_file', name='qc-script-parts-' + result.id + '.zip')}), 200
+            return jsonify({'id': result.id, 'complete': result.complete,
+                            'script_parts_url': url_for('download_generated_file', result_id=str(result_id))}), 200
     else:
         return jsonify({'id': result.id, 'complete': result.complete}), 200
 
@@ -93,9 +82,11 @@ def download_uploaded_file(name):
     return send_from_directory(app.config["UPLOAD_FOLDER"], name)
 
 
-@app.route('/qc-script-splitter/api/v1.0/qc-script-parts/<name>')
-def download_generated_file(name):
-    return send_from_directory(app.config["RESULT_FOLDER"], name)
+@app.route('/qc-script-splitter/api/v1.0/qc-script-parts/<result_id>')
+def download_generated_file(result_id):
+    directory = os.path.join(app.config["RESULT_FOLDER"], result_id)
+    file_name = 'qc-script-parts.zip'
+    return send_from_directory(directory, file_name)
 
 
 @app.route('/qc-script-splitter/api/v1.0/version', methods=['GET'])

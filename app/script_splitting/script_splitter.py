@@ -32,6 +32,7 @@ def split_script(script, splitting_labels):
     # start building result_script with preamble
     result_script = script[0:code_blocks[0][0]]
 
+    extracted_parts = {}
     all_possible_return_variables = []
     for block in code_blocks:
         first = block[0]
@@ -50,7 +51,9 @@ def split_script(script, splitting_labels):
         # generate new method from code block and append to result script
         method_name = "function_" + str(first) + "to" + str(last)
         created_method = create_method(code_block, method_name, parameters, return_variables)
-        result_script.append(created_method)
+        extracted_file_name = method_name + ".py"
+        # % TODO generate better name and file imports
+        extracted_parts[extracted_file_name] = created_method
 
         # generate method call from method and append to result script
         method_call = ""
@@ -59,6 +62,9 @@ def split_script(script, splitting_labels):
         method_call += method_name + "(" + ",".join(parameters) + ")"
         app.logger.debug("Insert method call for created method: %s" % method_call)
         result_script.append(RedBaron(method_call)[0])
+        extracted_parts['base_script.py'] = result_script
+
+    return extracted_parts
 
 
 def identify_code_blocks(splitting_labels):
@@ -152,4 +158,4 @@ def create_method(code_block, method_name, parameters, return_variables):
         create_str += "\n    " + "return " + ", ".join(return_variables)
 
     # return first node which is the complete def node
-    return RedBaron(create_str)[0]
+    return RedBaron(create_str)

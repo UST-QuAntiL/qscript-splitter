@@ -25,14 +25,15 @@ from app.script_splitting.script_splitter import split_script
 import json
 import os
 import urllib.request
+from rq import get_current_job
 
 
 def split_qc_script(script_url, knowledge_base_url):
     app.logger.info("Script Handler: Start splitting...")
 
     # RedBaron object containing all information about the script to split
-    with urllib.request.urlopen(script_url) as f:
-        qc_script_baron = RedBaron(f.read().decode('utf-8'))
+    with urllib.request.urlopen(script_url) as script_file:
+        qc_script_baron = RedBaron(script_file.read().decode('utf-8'))
         app.logger.error('TEST %s' % len(qc_script_baron))
     if qc_script_baron is None or len(qc_script_baron) == 0:
         app.logger.error('Could not load base script... Abort')
@@ -61,6 +62,30 @@ def split_qc_script(script_url, knowledge_base_url):
 
     # Split the script
     app.logger.info('Start splitting script...')
-    split_script(flattened_file, labels)
+    script_parts = split_script(flattened_file, labels)
+
+    # Save all script parts as files
+    files = save_as_files(script_parts)
+
+    return files
 
 
+def save_as_files(extracted_parts):
+    job_id = get_current_job().get_id()
+
+    # Create result directory if not existing
+    directory = os.path.join(app.config["RESULT_FOLDER"], job_id)
+    if not os.path.exists(directory):
+        app.logger.debug("Create result folder %s" % directory)
+        os.makedirs(directory)
+
+    # Save all script parts as files
+    files = []
+    for filename, redbaron_file in extracted_parts.items():
+        print(filename, '->', redbaron_file)
+        app.logger.debug("Save %s as file in %s" % (filename, directory))
+        with open(os.path.join(directory, filename), "w") as file:
+            file.write(redbaron_file.dumps())
+        files.append(file)
+
+    return files
