@@ -34,8 +34,19 @@ def get_labels(script, white_list, black_list):
             app.logger.debug('Found import --> IMPORT')
             label = Labels.IMPORTS
 
+        # Handle splitting markers
+        elif line_baron.type == 'comment':
+            if line_baron.value == '# ---start prevent split---':
+                label = Labels.START_PREVENT_SPLIT
+            elif line_baron.value == '# ---end prevent split---':
+                label = Labels.END_PREVENT_SPLIT
+            elif line_baron.value == '# ---force split---':
+                label = Labels.FORCE_SPLIT
+            else:
+                label = Labels.NO_CODE
+
         # Handle empty lines and comments
-        elif line_baron.type in ['endl', 'comment']:
+        elif line_baron.type in ['endl']:
             app.logger.debug('Empty Line or Comment --> NO_CODE')
             label = Labels.NO_CODE
 

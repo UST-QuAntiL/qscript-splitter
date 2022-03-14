@@ -81,8 +81,15 @@ def identify_code_blocks(splitting_labels):
     list_of_all_code_block_indices = []
     code_block_indices = []
     current_label = None
+    prevent_split = 0
     for i in range(len(splitting_labels)):
         label = splitting_labels[i]
+        if label == Labels.START_PREVENT_SPLIT:
+            prevent_split = 2
+            continue
+        if label == Labels.END_PREVENT_SPLIT:
+            prevent_split = 0
+            continue
         # Skip imports
         if label == Labels.IMPORTS:
             continue
@@ -90,18 +97,29 @@ def identify_code_blocks(splitting_labels):
         if label == Labels.NO_CODE:
             code_block_indices.append(i)
             continue
-        # Tag label of current block
+
+        # Tag label of first block
         if current_label is None:
             current_label = label
+
         # Start new code block if label changes
-        if label != current_label:
-            current_label = label
-            list_of_all_code_block_indices.append(code_block_indices[:])
-            code_block_indices = []
+        # Only for first line in protected block (prevent_split == 2) or outside protected block (prevented_split <= 0)
+        if prevent_split != 1:
+            prevent_split -= 1
+            if len(code_block_indices) > 0 and (label == Labels.FORCE_SPLIT or label != current_label):
+                list_of_all_code_block_indices.append(code_block_indices[:])
+                code_block_indices = []
+            if label == Labels.FORCE_SPLIT:
+                current_label = None
+            else:
+                current_label = label
+
         # Add line to code block
         code_block_indices.append(i)
+
     # Add last code block
     list_of_all_code_block_indices.append(code_block_indices[:])
+
     return list_of_all_code_block_indices
 
 
