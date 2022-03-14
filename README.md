@@ -1,74 +1,67 @@
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-# qscript-splitter
-Dieses Repository beinhaltet die Implementierung der Masterarbeit "Automatisierten Generierung von Quantum Workflows".
+# qiskit-runtime-handler
 
-Der hier implementierte Algorithmus kann entweder alleine oder zusammen mit dem [QuantME-Modeling and Transformation Framework](https://github.com/UST-QuAntiL/QuantME-TransformationFramework) verwendet werden.
-Wird der Algorithmus alleine Ausgeführt, so werden eingegebene Quantum Skripts aufgeteilt und die entstandenen Teile anschließend in einzelnen Dateien gespeichert.
-Zusammen mit dem QuantME-Modeling and Transformation Framework werden zusätzlich Workflow Elemente generiert und mit den entsprechend generierten Teilen verbunden.
+This service takes a workflow fragment realizing a hybrid algorithm as input and generates a [Qiskit Runtime](https://quantum-computing.ibm.com/lab/docs/iql/runtime/) program to benefit from speedups and reduced queuing times.
+Additionally, an agent is generated which handles the transfer of input/output parameters between the Qiskit Runtime program and a workflow.
 
-### Set Up (Algorithmus alleine)
-Spezifiziere Input:
-- In `testMain.py` wird eine Input-Datei definiert (Zeile 11).
-- Per Default wird die Eingabe innerhalb der Datei `../qscript-splitter/Example/exampleScript.py` erwartet.
-⇒ Plaziere Input Datei entsprechend.
+The qiskit-runtime-handler can be used in conjunction with the [QuantME Transformation Framework](https://github.com/UST-QuAntiL/QuantME-TransformationFramework).
+Please have a look at the corresponding [documentation](https://github.com/UST-QuAntiL/QuantME-TransformationFramework/tree/develop/docs/quantme/Analysis-and-Rewrite).
+Furthermore, a use case showing the analysis and rewrite of quantum workflows using the qiskit-runtime-handler is available [here](https://github.com/UST-QuAntiL/QuantME-UseCases/tree/master/2022-closer).
 
-Führe das Python-Script  `testMain.py` aus.
-⇒ Die Ausgabe des Algorithmus befindet sich schließlich in den Dateien
-`../qscript-splitter/Example/**part.py`.
+## Docker Setup
 
-### Set Up (inklusive QuantME-Modeling and Transformation Framework)
-Installiere QuantME-Modeling and Transformation Framework.
-Anleitung: https://github.com/UST-QuAntiL/QuantME-TransformationFramework/tree/develop/docs 
-
-Füge Plugin Hinzu:
-- Erstelle einen neuen Ordner mit dem Name `scriptSplitter` unter 
-`../QuantME-TransformationFramework/resources/plugins/QuantME-CamundaPlugin`
-- Kopiere die Dateien von `qscript-splitter/CamundaPluginFiles` in den neuen Ordner.
-- Erstelle neuen Build `npm run build` 
-
-Konfiguriere Plugin:
-- In der vorher kopierten Datei `../ScriptSplitterPlugin.js` befindet sich die Funktion `getInput()`.
-- Hier werden URL und fileName spezifiziert.
-⇒ URL: URL der aktiven Flask App 
-⇒ fileName: Input-Datei, default siehe oben (Algorithmus alleine).
-
-
-Installiere [Flask](https://flask.palletsprojects.com/en/2.0.x/).
-Anleitung: https://flask.palletsprojects.com/en/2.0.x/installation/
-
-Starte Flask-App:
-```perl
-# setze Einstiegspunkt (BASH)  
-export FLASP_APP=main
-# setze Einstiegspunkt (CMD)
-set FLASP_APP=main
-# starte flask
-flask run
+* Clone the repository:
+```
+git clone https://github.com/UST-QuAntiL/qiskit-runtime-handler.git
 ```
 
-Starte QuantME-Modeling and Transformation Framework (inkl. Plugin), z.B. mit  `npm run dev`.
+* Start the containers using the [docker-compose file](docker-compose.yml):
+```
+docker-compose pull
+docker-compose up
+```
 
-Der Algorithmus kann jetzt über die Toolbar in der GUI gestartet werden.
-⇒ Button "Start Splitting"
+Now the qiskit-runtime-handler is available on http://localhost:8889/.
 
-**Ergebnis:**
-Zerlegt die (default) Datei in drei Teile und speichert diese unter `../qscript-splitter/Example/**part.py`.
-Ein Workflow wird generiert.
-Der Workflow enthält drei (External-)Service-Tasks mit einer jeweils zufälligen Topic.
-Unter `../qscript-splitter/Example/` stehen Polling-Agents für jeden Service-Task bereit.
-Die Polling-Agents müssen manuell konfiguriert werden.
-Beim Start über die Kommando-Zeile können Camunda-Endpoint (Arg[1]) und Topic (Arg[2]) spezifiziert werden.
+## Local Setup
 
-### Anmerkung
-Dies ist eine prototypische Implementierung.
-Die einzelnen Komponeten stellen keine ausgereifte Software-Lösung dar.
+### Start Redis
 
-### Lizenz
-[Apache-2.0 License](https://github.com/UST-QuAntiL/qscript-splitter/blob/main/LICENSE)
+Start Redis, e.g., using Docker:
 
+```
+docker run -p 5040:5040 redis --port 5040
+```
 
+### Configure the Qiskit Runtime Handler
 
+Before starting the Qiskit Runtime handler, define the following environment variables:
 
+```
+FLASK_RUN_PORT=8889
+REDIS_URL=redis://$DOCKER_ENGINE_IP:5040
+```
 
+Thereby, please replace $DOCKER_ENGINE_IP with the actual IP of the Docker engine you started the Redis container.
 
+### Configure the Database
 
+* Install SQLite DB, e.g., as described [here](https://blog.miguelgrinberg.com/post/the-flask-mega-tutorial-part-iv-database)
+* Create a `data` folder in the `app` folder
+* Setup the results table with the following commands:
+
+```
+flask db migrate -m "results table"
+flask db upgrade
+```
+
+### Start the Application
+
+Start a worker for the request queue:
+
+```
+rq worker --url redis://$DOCKER_ENGINE_IP:5040 qiskit-runtime-handler
+```
+
+Finally, start the Flask application, e.g., using PyCharm or the command line.
