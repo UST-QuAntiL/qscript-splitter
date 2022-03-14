@@ -151,19 +151,21 @@ def compute_parameters(code_block, all_possible_return_variables):
 
 
 def create_method(code_block, method_name, parameters, return_variables):
-    # TODO: work on nodes instead of strings to have indentation correct
     app.logger.info("Extract code block to separate function: %s" % method_name)
 
-    # create new def node
-    create_str = "def " + method_name + "(" + ", ".join(parameters) + "):"
+    # Create new def node
+    method = RedBaron("def " + method_name + "(" + ", ".join(parameters) + "):\n    pass")[0]
+    # Method cannot be empty during creation. Thus, pop the first line 'pass' now
+    method.value.pop(0)
 
-    # add lines to def node
+    # Add all lines of code block to def node
     for line in code_block:
-        create_str += "\n    " + str(line.dumps())
+        app.logger.debug("Add line to method: %s" % line.dumps())
+        method.value.append(RedBaron(str(line.dumps()))[0])
 
-    # add return statement
+    # Add return statement
     if len(return_variables) > 0:
-        create_str += "\n    " + "return " + ", ".join(return_variables)
+        app.logger.debug("Add return statement to method")
+        method.value.append(RedBaron("return " + ", ".join(return_variables)))
 
-    # return first node which is the complete def node
-    return RedBaron(create_str)
+    return RedBaron(method)
