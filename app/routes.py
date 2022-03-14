@@ -29,7 +29,7 @@ import shutil
 
 @app.route('/qc-script-splitter/api/v1.0/split-qc-script', methods=['POST'])
 def split_qc_script():
-    """Put qc srcipt split job in queue. Return location of the later result."""
+    """Put QC script split job in queue. Return location of the later result."""
 
     # Clear working directories
     if app.config['CLEAR_FILES_ON_NEW_REQUEST']:
@@ -91,11 +91,13 @@ def get_result(result_id):
 
 @app.route('/qc-script-splitter/api/v1.0/uploads/<name>')
 def download_uploaded_file(name):
+    """Return file from upload folder."""
     return send_from_directory(app.config["UPLOAD_FOLDER"], name)
 
 
 @app.route('/qc-script-splitter/api/v1.0/qc-script-parts/<result_id>')
 def download_generated_file(result_id):
+    """Return file from result folder."""
     directory = os.path.join(app.config["RESULT_FOLDER"], result_id)
     file_name = 'qc-script-parts.zip'
     return send_from_directory(directory, file_name)
@@ -120,4 +122,5 @@ def upload_knowledge_base():
 
 @app.route('/qc-script-splitter/api/v1.0/knowledge-base', methods=['GET'])
 def download_knowledge_base():
+    """Return knowledge base."""
     return send_from_directory(app.config["KNOWLEDGE_BASE_FOLDER"], 'knowledge_base.json')

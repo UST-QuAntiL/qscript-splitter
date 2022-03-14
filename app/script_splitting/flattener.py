@@ -21,19 +21,26 @@ import logging
 
 
 def flatten(script):
-    # retrieve all nodes invoking a function (contain a call node at the second position)
-    function_invocation_nodes = script.find_all('atomtrailers',
-                                                         value=lambda atomtrailer_node_value: len(atomtrailer_node_value) >= 2 and atomtrailer_node_value[1].type == 'call')
+    """
+    A script is flattened with respect to function calls so that the
+    resulting script no longer contains function definitions and calls.
+
+    Caution: Recursion is not supported!
+    """
+
+    # Retrieve all nodes invoking a function (contain a call node at the second position)
+    function_invocation_nodes = script.find_all('atomtrailers', value=lambda atomtrailer_node_value:
+                                                len(atomtrailer_node_value) >= 2
+                                                and atomtrailer_node_value[1].type == 'call')
     logging.debug('Found %d function invocations!' % len(function_invocation_nodes))
 
-
-    # extract names of invoked functions
+    # Extract names of invoked functions
     invoked_function_names = []
     for function_invocation_node in function_invocation_nodes:
         invoked_function_names.append(function_invocation_node[0].value)
     logging.debug('Invoked functions: %s' % invoked_function_names)
 
-    # get all def nodes in the script
+    # Get all def nodes in the script
     def_nodes = script.find_all('def', name=lambda name: name in invoked_function_names)
     # TODO: handle ifs, while, ifelseblock, etc. contained in identified def_nodes
     # TODO: assign global variables to list of quantum objects

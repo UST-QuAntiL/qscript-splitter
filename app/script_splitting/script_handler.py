@@ -70,7 +70,7 @@ def split_qc_script(script_url, knowledge_base_url):
     return files
 
 
-def save_as_files(extracted_parts):
+def save_as_files(script_parts):
     job_id = get_current_job().get_id()
 
     # Create result directory if not existing
@@ -81,8 +81,7 @@ def save_as_files(extracted_parts):
 
     # Save all script parts as files
     files = []
-    for filename, redbaron_file in extracted_parts.items():
-        print(filename, '->', redbaron_file)
+    for filename, redbaron_file in script_parts.items():
         app.logger.debug("Save %s as file in %s" % (filename, directory))
         with open(os.path.join(directory, filename), "w") as file:
             file.write(redbaron_file.dumps())

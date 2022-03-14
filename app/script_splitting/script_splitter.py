@@ -29,7 +29,7 @@ def split_script(script, splitting_labels):
     code_blocks = identify_code_blocks(splitting_labels)
     app.logger.debug("Code block indices: %s" % code_blocks)
 
-    # start building result_script with preamble
+    # Start building result_script with preamble
     preamble = script[0:code_blocks[0][0]]
     result_script = []
 
@@ -40,16 +40,16 @@ def split_script(script, splitting_labels):
         last = block[-1]
         code_block = script[first:last+1]
 
-        # compute list of parameters
+        # Compute list of parameters
         parameters = compute_parameters(code_block, all_possible_return_variables)
         app.logger.info("Call arguments for code block %s: %s" % (block, parameters))
 
-        # compute list of return variables
+        # Compute list of return variables
         return_variables = compute_return_variables(block, script)
         all_possible_return_variables.extend(return_variables)
         app.logger.info("Return arguments for code block %s: %s" % (block, return_variables))
 
-        # generate new method from code block and append to result script
+        # Generate new method from code block and append to result script
         method_name = "function_" + str(first) + "to" + str(last)
         created_method = create_method(code_block, method_name, parameters, return_variables)
         extracted_file_name = method_name + ".py"
@@ -57,11 +57,11 @@ def split_script(script, splitting_labels):
 
         # TODO move/copy imports to extracted files
 
-        # generate imports into base file
+        # Generate imports into base file
         app.logger.debug("Insert import to extracted file into base script")
         preamble.append(RedBaron('from ' + method_name + ' import ' + method_name)[0])
 
-        # generate method call from method and append to result script
+        # Generate method call from method and append to result script
         method_call = ""
         if len(return_variables) > 0:
             method_call += ", ".join(return_variables) + " = "
@@ -81,24 +81,24 @@ def identify_code_blocks(splitting_labels):
     current_label = None
     for i in range(len(splitting_labels)):
         label = splitting_labels[i]
-        # skip imports
+        # Skip imports
         if label == Labels.IMPORTS:
             continue
-        # add empty lines to code block, too
+        # Add empty lines to code block, too
         if label == Labels.NO_CODE:
             code_block_indices.append(i)
             continue
-        # tag label of current block
+        # Tag label of current block
         if current_label is None:
             current_label = label
-        # start new code block if label changes
+        # Start new code block if label changes
         if label != current_label:
             current_label = label
             list_of_all_code_block_indices.append(code_block_indices[:])
             code_block_indices = []
-        # add line to code block
+        # Add line to code block
         code_block_indices.append(i)
-    # add last code block
+    # Add last code block
     list_of_all_code_block_indices.append(code_block_indices[:])
     return list_of_all_code_block_indices
 
