@@ -42,25 +42,29 @@ def split_qc_script():
 
     # Extract required input data
     script = request.files['script']
+    requirements = request.files['requirements']
     app.logger.info('Received request for splitting script...')
 
     # Store file with required script in local file and forward path to the workers
-    upload_folder = app.config["UPLOAD_FOLDER"]
+    random_string = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))
+    upload_folder = os.path.join(app.config["UPLOAD_FOLDER"], random_string)
     app.logger.info('Storing uploaded script at folder: ' + str(upload_folder))
     if not os.path.exists(upload_folder):
         os.makedirs(upload_folder)
-    random_string = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))
-    file_name = 'qc-script-' + random_string + '.py'
-    script.save(os.path.join(upload_folder, file_name))
+    script_file_name = 'qc-script.py'
+    requirements_file_name = 'requirements.txt'
+    script.save(os.path.join(upload_folder, script_file_name))
+    requirements.save(os.path.join(upload_folder, requirements_file_name))
 
-    script_url = url_for('download_uploaded_file', name=os.path.basename(file_name))
+    script_url = url_for('download_uploaded_file', folder=random_string, name=os.path.basename(script_file_name))
+    rq_url = url_for('download_uploaded_file', folder=random_string, name=os.path.basename(requirements_file_name))
     app.logger.info('File available via URL: ' + str(script_url))
 
     kb_url = url_for('download_knowledge_base')
     app.logger.info('Knowledge base available via URL: ' + str(kb_url))
 
     # Execute job asynchronously
-    job = app.queue.enqueue('app.tasks.qc_script_splitting_task', qc_script_url=script_url, knowledge_base_url=kb_url, job_timeout=18000)
+    job = app.queue.enqueue('app.tasks.qc_script_splitting_task', qc_script_url=script_url, requirements_url=rq_url, knowledge_base_url=kb_url, job_timeout=18000)
     app.logger.info('Added job for qc script splitting to the queue...')
     result = Result(id=job.get_id())
     db.session.add(result)
@@ -89,10 +93,10 @@ def get_result(result_id):
         return jsonify({'id': result.id, 'complete': result.complete}), 200
 
 
-@app.route('/qc-script-splitter/api/v1.0/uploads/<name>')
-def download_uploaded_file(name):
+@app.route('/qc-script-splitter/api/v1.0/uploads/<folder>/<name>')
+def download_uploaded_file(folder, name):
     """Return file from upload folder."""
-    return send_from_directory(app.config["UPLOAD_FOLDER"], name)
+    return send_from_directory(os.path.join(app.config["UPLOAD_FOLDER"], folder), name)
 
 
 @app.route('/qc-script-splitter/api/v1.0/qc-script-parts/<result_id>')

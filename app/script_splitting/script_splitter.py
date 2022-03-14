@@ -22,7 +22,7 @@ from redbaron import RedBaron
 from app.script_splitting.Labels import Labels
 
 
-def split_script(script, splitting_labels):
+def split_script(script, requirements, splitting_labels):
     for i in range(len(script)):
         app.logger.debug("%s: %s" % (splitting_labels[i], repr(script[i].dumps())))
 
@@ -38,7 +38,7 @@ def split_script(script, splitting_labels):
     for block in code_blocks:
         first = block[0]
         last = block[-1]
-        code_block = script[first:last+1]
+        code_block = script[first:last + 1]
 
         # Compute list of parameters
         parameters = compute_parameters(code_block, all_possible_return_variables)
@@ -55,7 +55,9 @@ def split_script(script, splitting_labels):
         extracted_file_name = method_name + ".py"
         extracted_parts[extracted_file_name] = created_method
 
-        # TODO move/copy imports to extracted files
+        # Copy imports to extracted files
+        requirements_name = "requirements_" + method_name + ".txt"
+        extracted_parts[requirements_name] = requirements
 
         # Generate imports into base file
         app.logger.debug("Insert import to extracted file into base script")
@@ -106,10 +108,10 @@ def identify_code_blocks(splitting_labels):
 def compute_return_variables(block_indices, script):
     first = block_indices[0]
     last = block_indices[-1]
-    code_block = script[first:last+1]
+    code_block = script[first:last + 1]
     remaining_block = []
-    if len(script) > last+1:
-        remaining_block = script[last+1:]
+    if len(script) > last + 1:
+        remaining_block = script[last + 1:]
 
     initialized_variables = []
     for line in code_block:
@@ -134,6 +136,8 @@ def is_used_in_line(variable, line):
 
 def compute_parameters(code_block, all_possible_return_variables):
     parameters = []
+
+    # TODO: Bug if a line.value is a simple int or string, recursive call will result in wrong type which is not indexable
     for line in code_block:
         if line.type == "assignment":
             param_list = compute_parameters(line.value, all_possible_return_variables)
@@ -160,7 +164,7 @@ def create_method(code_block, method_name, parameters, return_variables):
 
     # Add all lines of code block to def node
     for line in code_block:
-        app.logger.debug("Add line to method: %s" % line.dumps())
+        app.logger.debug("Add line to method: %s" % repr(line.dumps()))
         method.value.append(RedBaron(str(line.dumps()))[0])
 
     # Add return statement

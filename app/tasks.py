@@ -29,15 +29,15 @@ import zipfile
 from app.script_splitting import script_handler
 
 
-def qc_script_splitting_task(qc_script_url, knowledge_base_url):
+def qc_script_splitting_task(qc_script_url, requirements_url, knowledge_base_url):
     app.logger.info('Start task split_qc_script...')
 
-    # Get URL to the ZIP file with the required programs
-    url = 'http://' + os.environ.get('FLASK_RUN_HOST') + ':' + os.environ.get('FLASK_RUN_PORT') + qc_script_url
+    script_url = 'http://' + os.environ.get('FLASK_RUN_HOST') + ':' + os.environ.get('FLASK_RUN_PORT') + qc_script_url
+    rq_url = 'http://' + os.environ.get('FLASK_RUN_HOST') + ':' + os.environ.get('FLASK_RUN_PORT') + requirements_url
     kb_url = 'http://' + os.environ.get('FLASK_RUN_HOST') + ':' + os.environ.get('FLASK_RUN_PORT') + knowledge_base_url
 
     # Call script handler to
-    script_splitting_result = script_handler.split_qc_script(url, kb_url)
+    script_splitting_result = script_handler.split_qc_script(script_url, rq_url, kb_url)
 
     # Pack all resulting files in one zip
     zip_file = zip_files(script_splitting_result)

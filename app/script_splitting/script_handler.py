@@ -24,20 +24,25 @@ from app.script_splitting.script_analyzer import get_labels
 from app.script_splitting.script_splitter import split_script
 import json
 import os
+import shutil
 import urllib.request
 from rq import get_current_job
 
 
-def split_qc_script(script_url, knowledge_base_url):
+def split_qc_script(script_url, requirements_url, knowledge_base_url):
     app.logger.info("Script Handler: Start splitting...")
 
     # RedBaron object containing all information about the script to split
     with urllib.request.urlopen(script_url) as script_file:
         qc_script_baron = RedBaron(script_file.read().decode('utf-8'))
-        app.logger.error('TEST %s' % len(qc_script_baron))
     if qc_script_baron is None or len(qc_script_baron) == 0:
         app.logger.error('Could not load base script... Abort')
         return
+
+    # Load Requirements
+    with urllib.request.urlopen(requirements_url) as req_file:
+        requirements_file = req_file.read().decode('utf-8')
+        app.logger.info('Loaded requirements')
 
     # Download knowledge base
     app.logger.info('Downloading knowledge base from: %s' % knowledge_base_url)
@@ -62,7 +67,7 @@ def split_qc_script(script_url, knowledge_base_url):
 
     # Split the script
     app.logger.info('Start splitting script...')
-    script_parts = split_script(flattened_file, labels)
+    script_parts = split_script(flattened_file, requirements_file, labels)
 
     # Save all script parts as files
     files = save_as_files(script_parts)
@@ -82,9 +87,12 @@ def save_as_files(script_parts):
     # Save all script parts as files
     files = []
     for filename, redbaron_file in script_parts.items():
-        app.logger.debug("Save %s as file in %s" % (filename, directory))
+        app.logger.debug("Save %s to %s" % (filename, directory))
         with open(os.path.join(directory, filename), "w") as file:
-            file.write(redbaron_file.dumps())
+            if filename.split("_")[0] == "requirements":
+                file.write(redbaron_file)
+            else:
+                file.write(redbaron_file.dumps())
         files.append(file)
 
     return files
