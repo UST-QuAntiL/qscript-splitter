@@ -1,6 +1,6 @@
 FROM python:3.7-slim
 
-MAINTAINER Benjamin Weder "benjamin.weder@iaas.uni-stuttgart.de"
+MAINTAINER Daniel Vietz "daniel.vietz@iaas.uni-stuttgart.de"
 
 COPY ./requirements.txt /requirements.txt
 WORKDIR /
@@ -8,6 +8,7 @@ RUN apt-get update
 RUN apt-get install -y gcc python3-dev
 RUN pip install -r requirements.txt
 COPY . /
+ADD knowledge_base app/data/knowledge_base
 
 EXPOSE 8889/tcp
 
