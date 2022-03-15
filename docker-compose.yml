@@ -15,7 +15,7 @@ services:
     image: planqk/qscript-splitter:latest
     command: sh /startup.sh
     ports:
-      - "8889:8889"
+      - "8890:8890"
     environment:
       - REDIS_URL=redis://redis:5040
       - DATABASE_URL=sqlite:////data/app.db
@@ -28,7 +28,7 @@ services:
     command: rq worker --url redis://redis:5040 script-splitting-handler
     environment:
       - FLASK_RUN_HOST=qc-script-splitter
-      - FLASK_RUN_PORT=8889
+      - FLASK_RUN_PORT=8890
       - REDIS_URL=redis://redis:5040
       - DATABASE_URL=sqlite:////data/app.db
     volumes:
