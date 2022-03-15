@@ -45,10 +45,10 @@ def qc_script_splitting_task(qc_script_url, requirements_url, knowledge_base_url
     # Build result using the zip file as parameter
     result = Result.query.get(get_current_job().get_id())
     if 'error' not in script_splitting_result:
-        app.logger.info('Program generation successful!')
-        result.script_parts = zip_file
+        app.logger.info('Script splitting successful!')
+        result.program = zip_file
     else:
-        app.logger.info('Program generation failed!')
+        app.logger.info('Script splitting failed!')
         result.error = "ERROR"
         # TODO: Error handling
 
@@ -72,9 +72,11 @@ def zip_files(files):
             file_path = file.name
             file_basename = os.path.basename(file_path)
             if os.path.exists(file.name):
-                app.logger.debug("Add file %s to zip folder %s" % (file_basename, file_path))
+                app.logger.debug("Add file %s to zip folder %s" % (file_basename, os.path.join(directory, 'qc-script-parts.zip')))
                 result_zip_file.write(file_path, file_basename)
             else:
                 app.logger.warning("File %s is not a file... skip." % file_path)
+    result_zip_file.close()
 
-    return result_zip_file
+    result_zip_file = open(os.path.join(directory, 'qc-script-parts.zip'), "rb")
+    return result_zip_file.read()

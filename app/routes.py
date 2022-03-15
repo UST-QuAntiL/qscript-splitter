@@ -87,6 +87,16 @@ def get_result(result_id):
         if result.error:
             return jsonify({'id': result.id, 'complete': result.complete, 'error': result.error}), 200
         else:
+            # create result directory if not existing
+            directory = os.path.join(app.config["RESULT_FOLDER"], result.id)
+            if not os.path.exists(directory):
+                os.makedirs(directory)
+
+            # create files and serve as URL
+            qc_script_parts = os.path.join(directory, 'qc-script-parts.zip')
+            with open(qc_script_parts, 'wb') as file:
+                file.write(result.program)
+
             return jsonify({'id': result.id, 'complete': result.complete,
                             'script_parts_url': url_for('download_generated_file', result_id=str(result_id))}), 200
     else:
