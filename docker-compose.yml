@@ -12,7 +12,7 @@ services:
     networks:
       - default
   qc-script-splitter:
-    image: qc-script-splitter
+    image: planqk/qscript-splitter:latest
     command: sh /startup.sh
     ports:
       - "8889:8889"
@@ -24,7 +24,7 @@ services:
     networks:
       - default
   rq-worker:
-    image: qc-script-splitter
+    image: planqk/qscript-splitter:latest
     command: rq worker --url redis://redis:5040 script-splitting-handler
     environment:
       - FLASK_RUN_HOST=qc-script-splitter
