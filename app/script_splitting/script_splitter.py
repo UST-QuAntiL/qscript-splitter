@@ -33,12 +33,14 @@ def split_script(script, requirements, splitting_labels):
     preamble = script[0:code_blocks[0][0]]
     result_script = []
 
-    extracted_parts = {}
+    result = {'extracted_parts': []}
     all_possible_return_variables = []
+
     for block in code_blocks:
         first = block[0]
         last = block[-1]
         code_block = script[first:last + 1]
+        part = {'name': str(first) + "to" + str(last)}
 
         # Compute list of parameters
         parameters = compute_parameters(code_block, all_possible_return_variables)
@@ -52,16 +54,14 @@ def split_script(script, requirements, splitting_labels):
         # Generate new method from code block and append to result script
         method_name = "function_" + str(first) + "to" + str(last)
         created_method = create_method(code_block, method_name, parameters, return_variables)
-        extracted_file_name = method_name + ".py"
-        extracted_parts[extracted_file_name] = created_method
+        part['app.py'] = created_method
 
         # Copy imports to extracted files
-        requirements_name = "requirements_" + method_name + ".txt"
-        extracted_parts[requirements_name] = requirements
+        part['requirements.txt'] = requirements
 
         # Generate imports into base file
         app.logger.debug("Insert import to extracted file into base script")
-        preamble.append(RedBaron('from ' + method_name + ' import ' + method_name)[0])
+        preamble.append(RedBaron('from part_' + str(first) + "to" + str(last) + '.app import ' + method_name)[0])
 
         # Generate method call from method and append to result script
         method_call = ""
@@ -71,10 +71,12 @@ def split_script(script, requirements, splitting_labels):
         app.logger.debug("Insert method call for created method: %s" % method_call)
         result_script.append(RedBaron(method_call)[0])
 
-    preamble.extend(result_script)
-    extracted_parts['base_script.py'] = preamble
+        result['extracted_parts'].append(part)
 
-    return extracted_parts
+    preamble.extend(result_script)
+    result['base_script.py'] = preamble
+
+    return result
 
 
 def identify_code_blocks(splitting_labels):

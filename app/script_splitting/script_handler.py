@@ -24,7 +24,7 @@ from app.script_splitting.script_analyzer import get_labels
 from app.script_splitting.script_splitter import split_script
 import json
 import os
-import shutil
+import zipfile
 import urllib.request
 from rq import get_current_job
 
@@ -70,9 +70,12 @@ def split_qc_script(script_url, requirements_url, knowledge_base_url):
     script_parts = split_script(flattened_file, requirements_file, labels)
 
     # Save all script parts as files
-    files = save_as_files(script_parts)
+    path = save_as_files(script_parts)
+    zip_file = zipfile.ZipFile(path + '.zip', 'w', zipfile.ZIP_DEFLATED)
+    zip_directory(path, zip_file)
+    zip_file.close()
 
-    return files
+    return open(path + '.zip', "rb").read()
 
 
 def save_as_files(script_parts):
@@ -84,15 +87,37 @@ def save_as_files(script_parts):
         app.logger.debug("Create result folder %s" % directory)
         os.makedirs(directory)
 
-    # Save all script parts as files
-    files = []
-    for filename, redbaron_file in script_parts.items():
-        app.logger.debug("Save %s to %s" % (filename, directory))
-        with open(os.path.join(directory, filename), "w") as file:
-            if filename.split("_")[0] == "requirements":
-                file.write(redbaron_file)
-            else:
-                file.write(redbaron_file.dumps())
-        files.append(file)
+    # Write base script to disk
+    with open(os.path.join(directory, 'base_script.py'), "w") as file:
+        app.logger.debug("Write base_script.py to %s" % directory)
+        file.write(script_parts['base_script.py'].dumps())
+        file.close()
 
-    return files
+    # Save extracted parts to separate subdirectories
+    for part in script_parts['extracted_parts']:
+        # Create subdirectory
+        part_directory = os.path.join(directory, part['name'])
+        if not os.path.exists(part_directory):
+            app.logger.debug("Create 'part' folder %s" % part_directory)
+            os.makedirs(part_directory)
+        # Write app.py to disk
+        with open(os.path.join(part_directory, "app.py"), "w") as file:
+            app.logger.debug("Write app.py to %s" % part_directory)
+            file.write(part['app.py'].dumps())
+            file.close()
+        # Write requirements.txt to disk
+        with open(os.path.join(part_directory, "requirements.txt"), "w") as file:
+            app.logger.debug("Write requirements.txt to %s" % part_directory)
+            file.write(part['requirements.txt'])
+            file.close()
+
+    return directory
+
+
+def zip_directory(directory_path, zip_file):
+    app.logger.debug("Combine all files from directory %s to zip file %s" % (directory_path, zip_file.filename))
+    for root, dirs, files in os.walk(directory_path):
+        for file in files:
+            zip_file.write(os.path.join(root, file),
+                           os.path.relpath(os.path.join(root, file),
+                           os.path.join(directory_path, '..')))
