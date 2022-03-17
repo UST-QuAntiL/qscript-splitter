@@ -32,6 +32,7 @@ def split_script(script, requirements, splitting_labels):
     # Start building result_script with preamble
     preamble = script[0:code_blocks[0][0]]
     result_script = []
+    result_workflow = [{"type": "start"}]
 
     result = {'extracted_parts': []}
     all_possible_return_variables = []
@@ -40,7 +41,7 @@ def split_script(script, requirements, splitting_labels):
         first = block[0]
         last = block[-1]
         code_block = script[first:last + 1]
-        part = {'name': str(first) + "to" + str(last)}
+        part = {'name': "part_" + str(first) + "to" + str(last)}
 
         # Compute list of parameters
         parameters = compute_parameters(code_block, all_possible_return_variables)
@@ -52,7 +53,7 @@ def split_script(script, requirements, splitting_labels):
         app.logger.info("Return arguments for code block %s: %s" % (block, return_variables))
 
         # Generate new method from code block and append to result script
-        method_name = "function_" + str(first) + "to" + str(last)
+        method_name = "main"
         created_method = create_method(code_block, method_name, parameters, return_variables)
         part['app.py'] = created_method
 
@@ -61,20 +62,26 @@ def split_script(script, requirements, splitting_labels):
 
         # Generate imports into base file
         app.logger.debug("Insert import to extracted file into base script")
-        preamble.append(RedBaron('from part_' + str(first) + "to" + str(last) + '.app import ' + method_name)[0])
+        import_as_name = part['name']
+        preamble.append(RedBaron('from ' + part['name'] + '.app import ' + method_name + ' as ' + import_as_name)[0])
 
         # Generate method call from method and append to result script
         method_call = ""
         if len(return_variables) > 0:
             method_call += ", ".join(return_variables) + " = "
-        method_call += method_name + "(" + ", ".join(parameters) + ")"
+        method_call += import_as_name + "(" + ", ".join(parameters) + ")"
         app.logger.debug("Insert method call for created method: %s" % method_call)
         result_script.append(RedBaron(method_call)[0])
+
+        result_workflow.append({"type": "task", "part": part['name']})
 
         result['extracted_parts'].append(part)
 
     preamble.extend(result_script)
     result['base_script.py'] = preamble
+
+    result_workflow.append({"type": "end"})
+    result['workflow.json'] = result_workflow
 
     return result
 

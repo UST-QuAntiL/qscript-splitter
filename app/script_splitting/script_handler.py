@@ -93,6 +93,12 @@ def save_as_files(script_parts):
         file.write(script_parts['base_script.py'].dumps())
         file.close()
 
+    # Write base script to disk
+    with open(os.path.join(directory, 'workflow.json'), "w") as file:
+        app.logger.debug("Write workflow.json to %s" % directory)
+        file.write(json.dumps(script_parts['workflow.json']))
+        file.close()
+
     # Save extracted parts to separate subdirectories
     for part in script_parts['extracted_parts']:
         # Create subdirectory
