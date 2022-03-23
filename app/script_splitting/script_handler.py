@@ -29,33 +29,11 @@ import urllib.request
 from rq import get_current_job
 
 
-def split_qc_script(script_url, requirements_url, knowledge_base_url):
-    app.logger.info("Script Handler: Start splitting...")
-
-    # RedBaron object containing all information about the script to split
-    with urllib.request.urlopen(script_url) as script_file:
-        qc_script_baron = RedBaron(script_file.read().decode('utf-8'))
-    if qc_script_baron is None or len(qc_script_baron) == 0:
-        app.logger.error('Could not load base script... Abort')
-        return
-
-    # Load Requirements
-    with urllib.request.urlopen(requirements_url) as req_file:
-        requirements_file = req_file.read().decode('utf-8')
-        app.logger.info('Loaded requirements')
-
-    # Download knowledge base
-    app.logger.info('Downloading knowledge base from: %s' % knowledge_base_url)
-    with urllib.request.urlopen(knowledge_base_url) as knowledge_base_file:
-        knowledge_base_json = json.load(knowledge_base_file)
-        white_list = knowledge_base_json['white_list']
-        black_list = knowledge_base_json['black_list']
-        app.logger.debug('Number of white list rules: %s' % len(white_list))
-        app.logger.debug('Number of black list rules: %s' % len(black_list))
-
-    if knowledge_base_json is None:
-        app.logger.error('Could not load knowledge base... Abort')
-        return
+def magic(qc_script_baron, requirements_file, knowledge_base_json):
+    white_list = knowledge_base_json['white_list']
+    black_list = knowledge_base_json['black_list']
+    app.logger.debug('Number of white list rules: %s' % len(white_list))
+    app.logger.debug('Number of black list rules: %s' % len(black_list))
 
     # Flatten the Script
     app.logger.info('Flatten Script')
@@ -68,6 +46,35 @@ def split_qc_script(script_url, requirements_url, knowledge_base_url):
     # Split the script
     app.logger.info('Start splitting script...')
     script_parts = split_script(flattened_file, requirements_file, labels)
+
+    return script_parts
+
+
+def split_qc_script(script_url, requirements_url, knowledge_base_url):
+    app.logger.info("Script Handler: Start splitting...")
+
+    # RedBaron object containing all information about the script to split
+    with urllib.request.urlopen(script_url) as script_file:
+        qc_script = RedBaron(script_file.read().decode('utf-8'))
+    if qc_script is None or len(qc_script) == 0:
+        app.logger.error('Could not load base script... Abort')
+        return
+
+    # Load Requirements File
+    with urllib.request.urlopen(requirements_url) as req_file:
+        requirements_file = req_file.read().decode('utf-8')
+        app.logger.info('Loaded requirements')
+
+    # Download knowledge base
+    app.logger.info('Downloading knowledge base from: %s' % knowledge_base_url)
+    with urllib.request.urlopen(knowledge_base_url) as knowledge_base_file:
+        knowledge_base_json = json.load(knowledge_base_file)
+
+    if knowledge_base_json is None:
+        app.logger.error('Could not load knowledge base... Abort')
+        return
+
+    script_parts = magic(qc_script, requirements_file, knowledge_base_json)
 
     # Save all script parts as files
     path = save_as_files(script_parts)
@@ -127,3 +134,21 @@ def zip_directory(directory_path, zip_file):
             zip_file.write(os.path.join(root, file),
                            os.path.relpath(os.path.join(root, file),
                            os.path.join(directory_path, '..')))
+
+
+if __name__ == '__main__':
+    basedir = os.path.join(os.path.abspath(os.path.dirname(__file__)), "..", "data")
+    script_path = os.path.join(basedir, "files", "example.py")
+    rq_path = os.path.join(basedir, "files", "requirements.txt")
+    kb_path = os.path.join(basedir, "knowledge_base", "knowledge_base.json")
+
+    base_script = open(script_path, "r")
+    qc_script_baron = RedBaron(base_script.read())
+
+    req_file = open(rq_path, "r")
+    requirements_file = req_file.read()
+
+    knowledge_base_file = open(kb_path, "r")
+    knowledge_base_json = json.load(knowledge_base_file)
+
+    script_parts = magic(qc_script_baron, requirements_file, knowledge_base_json)
