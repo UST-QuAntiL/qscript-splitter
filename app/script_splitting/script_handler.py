@@ -29,7 +29,7 @@ import urllib.request
 from rq import get_current_job
 
 
-def magic(qc_script_baron, requirements_file, knowledge_base_json):
+def do_the_split(qc_script_baron, requirements_file, knowledge_base_json):
     white_list = knowledge_base_json['white_list']
     black_list = knowledge_base_json['black_list']
     app.logger.debug('Number of white list rules: %s' % len(white_list))
@@ -74,7 +74,7 @@ def split_qc_script(script_url, requirements_url, knowledge_base_url):
         app.logger.error('Could not load knowledge base... Abort')
         return
 
-    script_parts = magic(qc_script, requirements_file, knowledge_base_json)
+    script_parts = do_the_split(qc_script, requirements_file, knowledge_base_json)
 
     # Save all script parts as files
     path = save_as_files(script_parts)
@@ -142,13 +142,4 @@ if __name__ == '__main__':
     rq_path = os.path.join(basedir, "files", "requirements.txt")
     kb_path = os.path.join(basedir, "knowledge_base", "knowledge_base.json")
 
-    base_script = open(script_path, "r")
-    qc_script_baron = RedBaron(base_script.read())
-
-    req_file = open(rq_path, "r")
-    requirements_file = req_file.read()
-
-    knowledge_base_file = open(kb_path, "r")
-    knowledge_base_json = json.load(knowledge_base_file)
-
-    script_parts = magic(qc_script_baron, requirements_file, knowledge_base_json)
+    result = do_the_split(RedBaron(open(script_path, "r").read()), open(rq_path, "r").read(), json.load(open(kb_path, "r")))
