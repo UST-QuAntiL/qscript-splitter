@@ -23,61 +23,93 @@ from app.script_splitting.Labels import Labels
 
 
 def get_labels(script, white_list, black_list):
-    line_labels = []
-    quantum_objects = []
+    # Get Initial labels
+    labels = get_initial_labels(script, white_list, black_list)
+    app.logger.debug("Initial Labels: %s" % labels)
 
-    for line_baron in script:
-        app.logger.debug('Label code line: %s...' % repr(line_baron.dumps()))
+    # If code blocks (ifs, whiles, etc.) are not hybrid, their explicit label is changed to QUANTUM/CLASSICAL
+    relabel_code_blocks_if_not_hybrid(script, labels)
+    app.logger.debug("Labels after relabeling: %s" % labels)
+
+    # Apply threshold to labels
+    apply_threshold(script, labels)
+    app.logger.debug("Labels after applying threshold: %s" % labels)
+
+    return labels
+
+
+def get_initial_labels(script, white_list, black_list, quantum_objects=None):
+    if quantum_objects is None:
+        quantum_objects = []
+    labels = {}
+
+    for baron_node in script:
+        app.logger.debug('Label code line: %s...' % repr(baron_node.dumps()))
 
         # Handle imports
-        if line_baron.type in ['import', 'from_import']:
+        if baron_node.type in ['import', 'from_import']:
             app.logger.debug('Found import --> IMPORT')
-            label = Labels.IMPORTS
+            labels[baron_node] = Labels.IMPORTS
 
         # Handle splitting markers
-        elif line_baron.type == 'comment':
-            if line_baron.value == '# ---start prevent split---':
-                label = Labels.START_PREVENT_SPLIT
-            elif line_baron.value == '# ---end prevent split---':
-                label = Labels.END_PREVENT_SPLIT
-            elif line_baron.value == '# ---force split---':
-                label = Labels.FORCE_SPLIT
+        elif baron_node.type == 'comment':
+            if baron_node.value == '# ---start prevent split---':
+                labels[baron_node] = Labels.START_PREVENT_SPLIT
+            elif baron_node.value == '# ---end prevent split---':
+                labels[baron_node] = Labels.START_PREVENT_SPLIT
+            elif baron_node.value == '# ---force split---':
+                labels[baron_node] = Labels.FORCE_SPLIT
             else:
-                label = Labels.NO_CODE
+                labels[baron_node] = Labels.NO_CODE
 
         # Handle empty lines and comments
-        elif line_baron.type in ['endl']:
+        elif baron_node.type in ['endl']:
             app.logger.debug('Empty Line or Comment --> NO_CODE')
-            label = Labels.NO_CODE
+            labels[baron_node] = Labels.NO_CODE
+
+        # Handle if-else-blocks
+        elif baron_node.type in ['ifelseblock']:
+            app.logger.info('Found ifelse code block --> Handle recursively')
+            labels[baron_node] = Labels.IF_ELSE_BLOCK
+            for if_else_node in baron_node.value:
+                code_block = if_else_node.value
+                sub_labels = get_initial_labels(code_block, white_list, black_list, quantum_objects)
+                labels.update(sub_labels)
+
+        # Handle while-/for-loops
+        elif baron_node.type in ['while', 'for']:
+            app.logger.info('Found while/for code block --> Handle recursively')
+            labels[baron_node] = Labels.LOOP
+            code_block = baron_node.value
+            sub_labels = get_initial_labels(code_block, white_list, black_list, quantum_objects)
+            labels.update(sub_labels)
 
         # Handle basic classical instructions
-        # TODO: handle code inside if/while separately
-        elif line_baron.type in ['if', 'while', 'print', 'ifelseblock', 'tuple', 'int', 'list']:
+        elif baron_node.type in ['print', 'tuple', 'int', 'list']:
             app.logger.info('Basic Type. --> CLASSICAL!')
-            label = Labels.CLASSIC
+            labels[baron_node] = Labels.CLASSICAL
 
         # Handle assignments
-        elif line_baron.type == 'assignment':
-            if line_baron.value.type != 'atomtrailers':
-                app.logger.error('Unexpected node type received: %s' % line_baron.value.type)
-            label = handle_atomic_trailer_nodes(line_baron.value, script, white_list, black_list, quantum_objects)
+        elif baron_node.type == 'assignment':
+            if baron_node.value.type != 'atomtrailers':
+                app.logger.error('Unexpected node type received: %s' % baron_node.value.type)
+            label = handle_atomic_trailer_nodes(baron_node.value, script, white_list, black_list, quantum_objects)
+            labels[baron_node] = label
             if label == Labels.QUANTUM:
-                app.logger.debug('"%s" is QUANTUM, thus, "%s" is QUANTUM as well.' % (line_baron.value, line_baron.target.value))
-                quantum_objects.append(line_baron.target.value)
+                app.logger.debug(
+                    '"%s" is QUANTUM, thus, "%s" is QUANTUM as well.' % (baron_node.value, baron_node.target.value))
+                quantum_objects.append(baron_node.target.value)
 
         # Handle atomtrailers
-        elif line_baron.type == 'atomtrailers':
-            label = handle_atomic_trailer_nodes(line_baron, script, white_list, black_list, quantum_objects)
+        elif baron_node.type == 'atomtrailers':
+            label = handle_atomic_trailer_nodes(baron_node, script, white_list, black_list, quantum_objects)
+            labels[baron_node] = label
 
         else:
-            app.logger.error('Unexpected node type received: %s' % line_baron.type)
-            label = Labels.NO_CODE
+            app.logger.error('Unexpected node type received: %s' % baron_node.type)
+            labels[baron_node] = Labels.NO_CODE
 
-        line_labels.append(label)
-
-    splitting_labels = apply_threshold(script, line_labels)
-
-    return splitting_labels
+    return labels
 
 
 def handle_atomic_trailer_nodes(atom_trailers_node, script, white_list, black_list, quantum_objects):
@@ -98,7 +130,7 @@ def handle_atomic_trailer_nodes(atom_trailers_node, script, white_list, black_li
     if uses_quantum_import(atom_trailers_node.value[0], script, white_list, black_list):
         return Labels.QUANTUM
     else:
-        return Labels.CLASSIC
+        return Labels.CLASSICAL
 
 
 def uses_quantum_import(line_value, script, white_list, black_list):
@@ -171,36 +203,101 @@ def is_in_knowledge_base(package_orig, knowledge_base):
     return False
 
 
-def apply_threshold(script, line_labels):
-    app.logger.debug("Start relabeling with threshold=%s..." % app.config["SPLITTING_THRESHOLD"])
-    splitting_labels = line_labels[:]
+def relabel_code_blocks_if_not_hybrid(script, splitting_labels):
+    for node in script:
+        if node.type in ["ifelseblock", "for", "while"]:
+            found_quantum = contains_any(node, splitting_labels, Labels.QUANTUM)
+            found_classical = contains_any(node, splitting_labels, Labels.CLASSICAL)
+            if found_quantum and not found_classical:
+                splitting_labels[node] = Labels.QUANTUM
+            elif found_classical and not found_quantum:
+                splitting_labels[node] = Labels.CLASSICAL
 
-    # If code is not hybrid, no splitting is necessary
-    if Labels.CLASSIC not in line_labels:
-        app.logger.warning("No relabeling necessary since it does not contain any classical parts!")
-        return splitting_labels
-    if Labels.QUANTUM not in line_labels:
-        app.logger.warning("No relabeling necessary since it does not contain any quantum parts!")
-        return splitting_labels
+
+def contains_any(node, splitting_labels, label):
+    if node.type == 'ifelseblock':
+        for block in node.value:
+            for n in block.value:
+                if contains_any(n, splitting_labels, label):
+                    return True
+    elif node.type in ['while', 'for']:
+        for n in node.value:
+            if contains_any(n, splitting_labels, label):
+                return True
+
+    return node in splitting_labels and splitting_labels[node] == label
+
+
+def apply_threshold(script, splitting_labels):
+    app.logger.debug("Start relabeling with threshold=%s..." % app.config["SPLITTING_THRESHOLD"])
 
     # Calculate number of classical lines before each quantum block and relabel if it is smaller than threshold
-    classical_indices = []
-    for i in range(len(script)):
-        if line_labels[i] == Labels.QUANTUM:
-            relabel_if_necessary(classical_indices, splitting_labels)
-            classical_indices = []
-        if line_labels[i] == Labels.CLASSIC:
-            classical_indices.append(i)
-    # Calculate number of trailing classical lines and relabel if it is smaller than threshold
-    relabel_if_necessary(classical_indices, splitting_labels)
+    classical_nodes = []
+    any_quantum = False
+    for node in script:
+        # Handle if-else-blocks recursively. Do not relabel preceding classical.
+        if splitting_labels[node] == Labels.IF_ELSE_BLOCK:
+            for block in node.value:
+                apply_threshold(block.value, splitting_labels)
+            classical_nodes = []
 
-    app.logger.debug("Labels without threshold: %s" % line_labels)
-    app.logger.debug("Labels with threshold(%s): %s" % (app.config["SPLITTING_THRESHOLD"], splitting_labels))
+        # Handle while-/for-blocks recursively. Do not relabel preceding classical.
+        if splitting_labels[node] == Labels.LOOP:
+            apply_threshold(node.value, splitting_labels)
+            classical_nodes = []
 
-    return splitting_labels
+        # If a quantum label if found, relabel preceding classical nodes (when threshold is missed)
+        if splitting_labels[node] == Labels.QUANTUM:
+            relabel_if_threshold_not_reached(classical_nodes, splitting_labels)
+            classical_nodes = []
+            any_quantum = True
+
+        # Add classical labels to list of 'preceding' classical_nodes
+        if splitting_labels[node] == Labels.CLASSICAL:
+            classical_nodes.append(node)
+
+    # Calculate number of trailing classical lines and relabel if it is smaller than threshold.
+    # For code blocks only containing classical elements, any_quantum is False.
+    if any_quantum:
+        relabel_if_threshold_not_reached(classical_nodes, splitting_labels)
 
 
-def relabel_if_necessary(classical_indices, splitting_labels):
-    if 0 < len(classical_indices) < app.config["SPLITTING_THRESHOLD"]:
-        for classical_index in classical_indices:
-            splitting_labels[classical_index] = Labels.QUANTUM
+def relabel_if_threshold_not_reached(classical_nodes, splitting_labels):
+    # Code blocks (ifs, whiles, etc.) also have additional code lines counted for threshold
+    weight = 0
+    for node in classical_nodes:
+        weight += calc_weight(node)
+
+    # Relabel classical nodes if threshold is not reached
+    if 0 < weight < app.config["SPLITTING_THRESHOLD"]:
+        for node in classical_nodes:
+            relabel(node, splitting_labels)
+
+
+def relabel(node, splitting_labels):
+    splitting_labels[node] = Labels.QUANTUM
+    # Relabel if-else-blocks recursively
+    if node.type == 'ifelseblock':
+        for block in node.value:
+            for x in block.value:
+                if x in splitting_labels:
+                    relabel(x)
+    # Relabel while-/for-blocks recursively
+    if node.type in ['while', 'for']:
+        for block in node.value:
+            if block in splitting_labels:
+                relabel(block)
+
+
+def calc_weight(node):
+    weight = 1
+    if node.type == 'ifelseblock':
+        for block in node.value:
+            weight -= 1
+            for x in block.value:
+                weight += calc_weight(x)
+    if node.type in ['while', 'for']:
+        weight -= 1
+        for block in node.value:
+            weight += calc_weight(block)
+    return weight

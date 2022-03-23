@@ -41,13 +41,13 @@ def do_the_split(qc_script_baron, requirements_file, knowledge_base_json):
 
     # Analyze the flattened script
     app.logger.info('Start analyzing script...')
-    labels = get_labels(flattened_file, white_list, black_list)
+    map_labels = get_labels(flattened_file, white_list, black_list)
 
     # Split the script
-    app.logger.info('Start splitting script...')
-    script_parts = split_script(flattened_file, requirements_file, labels)
+    # app.logger.info('Start splitting script...')
+    # script_parts = split_script(flattened_file, requirements_file, labels)
 
-    return script_parts
+    # return script_parts
 
 
 def split_qc_script(script_url, requirements_url, knowledge_base_url):
@@ -74,6 +74,7 @@ def split_qc_script(script_url, requirements_url, knowledge_base_url):
         app.logger.error('Could not load knowledge base... Abort')
         return
 
+    # Split into several script parts
     script_parts = do_the_split(qc_script, requirements_file, knowledge_base_json)
 
     # Save all script parts as files

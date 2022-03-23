@@ -86,13 +86,40 @@ def split_script(script, requirements, splitting_labels):
     return result
 
 
-def identify_code_blocks(splitting_labels):
-    list_of_all_code_block_indices = []
-    code_block_indices = []
+def identify_code_blocks2(script, splitting_labels):
+    list_of_all_code_block_paths = []
+    code_block_paths = []
     current_label = None
     prevent_split = 0
+
+    if len(splitting_labels) != len(script):
+        app.logger.error('Number of splitting labels and nodes in script differ... Abort!')
+        return
+
     for i in range(len(splitting_labels)):
         label = splitting_labels[i]
+        path = script[i].path()
+
+        # Check if label is actually a list of labels --> either if-else- or for-/while-block
+        if type(label) is list:
+            # Close current code block and start new one
+            if len(code_block_paths) > 0:
+                list_of_all_code_block_paths.append(code_block_paths[:])
+                code_block_paths = []
+            current_label = None
+            # Handle if-else-blocks
+            # Label is a list of a list of labels: [[],[],[]]
+            if label[0] is list:
+                app.logger.debug("We have an if-Block here!: %s" % label)
+                for element in label:
+                    x = identify_code_blocks(element)
+            # Handle loop-blocks
+            else:
+                app.logger.debug("We have a while-Loop here!: %s" % label)
+                x = identify_code_blocks(label)
+            # Do not add if/while node itself to any code block
+            continue
+
         if label == Labels.START_PREVENT_SPLIT:
             prevent_split = 2
             continue
@@ -104,7 +131,68 @@ def identify_code_blocks(splitting_labels):
             continue
         # Add empty lines to code block, too
         if label == Labels.NO_CODE:
-            code_block_indices.append(i)
+            # code_block_indices.append(i)
+            continue
+
+        # Tag label of first block
+        if current_label is None:
+            current_label = label
+
+        # Start new code block if label changes
+        # Only for first line in protected block (prevent_split == 2) or outside protected block (prevented_split <= 0)
+        if prevent_split != 1:
+            prevent_split -= 1
+            if len(code_block_paths) > 0 and (label == Labels.FORCE_SPLIT or label != current_label):
+                list_of_all_code_block_paths.append(code_block_paths[:])
+                code_block_paths = []
+            if label == Labels.FORCE_SPLIT:
+                current_label = None
+            else:
+                current_label = label
+
+        # Add line to code block
+        code_block_paths.append(path)
+
+    # Add last code block
+    list_of_all_code_block_paths.append(code_block_paths[:])
+
+    return list_of_all_code_block_paths
+
+
+def identify_code_blocks(splitting_labels):
+    list_of_all_code_block_indices = []
+    code_block_indices = []
+    current_label = None
+    prevent_split = 0
+    for i in range(len(splitting_labels)):
+        label = splitting_labels[i]
+
+        if type(label) is list:
+            if len(code_block_indices) > 0:
+                list_of_all_code_block_indices.append(code_block_indices[:])
+                code_block_indices = []
+            current_label = None
+            if label[0] is list:
+                app.logger.debug("We have an if-Block here!: %s" % label)
+                for element in label:
+                    x = identify_code_blocks(element)
+            else:
+                app.logger.debug("We have a while-Loop here!: %s" % label)
+                x = identify_code_blocks(label)
+            continue
+
+        if label == Labels.START_PREVENT_SPLIT:
+            prevent_split = 2
+            continue
+        if label == Labels.END_PREVENT_SPLIT:
+            prevent_split = 0
+            continue
+        # Skip imports
+        if label == Labels.IMPORTS:
+            continue
+        # Add empty lines to code block, too
+        if label == Labels.NO_CODE:
+            # code_block_indices.append(i)
             continue
 
         # Tag label of first block
