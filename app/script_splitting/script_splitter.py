@@ -26,11 +26,8 @@ def split_script(script, requirements, splitting_labels):
     for node in script:
         app.logger.debug("%s: %s" % (splitting_labels[node], repr(node)))
 
-    code_blocks, sizes = identify_code_blocks_new(splitting_labels)
-    app.logger.debug("Code block sizes: %s" % sizes)
+    code_blocks = identify_code_blocks(script, splitting_labels)
 
-    preamble = []
-    result_script = []
     result_workflow = [{"type": "start"}]
     result = {'extracted_parts': []}
     all_possible_return_variables = []
@@ -51,70 +48,33 @@ def split_script(script, requirements, splitting_labels):
 
         # Generate new method from code block and append to result script
         method_name = "main"
-        created_method = create_method(code_block, method_name, parameters, return_variables)
+        created_method = create_method(method_name, code_block, parameters, return_variables)
         part['app.py'] = created_method
-
-        print(created_method.dumps())
 
         # Copy imports to extracted files
         part['requirements.txt'] = requirements
 
-        # Generate imports into base file
-        app.logger.debug("Insert import to extracted file into base script")
-        import_as_name = part['name']
-        preamble.append(RedBaron('from ' + part['name'] + '.app import ' + method_name + ' as ' + import_as_name)[0])
-
-        # Generate method call from method and append to result script
-        method_call = ""
-        if len(return_variables) > 0:
-            method_call += ", ".join(return_variables) + " = "
-        method_call += import_as_name + "(" + ", ".join(parameters) + ")"
-        app.logger.debug("Insert method call for created method: %s" % method_call)
-        result_script.append(RedBaron(method_call)[0])
-
+        # Add task to 'workflow'
         result_workflow.append({"type": "task", "part": part['name']})
 
+        # Add part to result
         result['extracted_parts'].append(part)
 
-    preamble.extend(result_script)
-    result['base_script.py'] = preamble
     result_workflow.append({"type": "end"})
     result['workflow.json'] = result_workflow
 
     return result
 
 
-def identify_code_blocks_new(splitting_labels):
-    sizes = []
-    result = []
-    block = []
-    for key, value in splitting_labels.items():
-        block.append(key)
-    result.append(block)
-    sizes.append(len(block))
-    return result, sizes
-
-
-def identify_code_blocks(splitting_labels):
-    list_of_all_code_block_indices = []
-    code_block_indices = []
+def identify_code_blocks(script, splitting_labels):
+    list_of_all_code_blocks = []
+    code_block = []
     current_label = None
     prevent_split = 0
-    for i in range(len(splitting_labels)):
-        label = splitting_labels[i]
+    for node in script:
+        label = splitting_labels[node]
 
-        if type(label) is list:
-            if len(code_block_indices) > 0:
-                list_of_all_code_block_indices.append(code_block_indices[:])
-                code_block_indices = []
-            current_label = None
-            if label[0] is list:
-                app.logger.debug("We have an if-Block here!: %s" % label)
-                for element in label:
-                    x = identify_code_blocks(element)
-            else:
-                app.logger.debug("We have a while-Loop here!: %s" % label)
-                x = identify_code_blocks(label)
+        if label in [Labels.LOOP, Labels.IF_ELSE_BLOCK]:
             continue
 
         if label == Labels.START_PREVENT_SPLIT:
@@ -139,21 +99,21 @@ def identify_code_blocks(splitting_labels):
         # Only for first line in protected block (prevent_split == 2) or outside protected block (prevented_split <= 0)
         if prevent_split != 1:
             prevent_split -= 1
-            if len(code_block_indices) > 0 and (label == Labels.FORCE_SPLIT or label != current_label):
-                list_of_all_code_block_indices.append(code_block_indices[:])
-                code_block_indices = []
+            if len(code_block) > 0 and (label == Labels.FORCE_SPLIT or label != current_label):
+                list_of_all_code_blocks.append(code_block[:])
+                code_block = []
             if label == Labels.FORCE_SPLIT:
                 current_label = None
             else:
                 current_label = label
 
         # Add line to code block
-        code_block_indices.append(i)
+        code_block.append(node)
 
     # Add last code block
-    list_of_all_code_block_indices.append(code_block_indices[:])
+    list_of_all_code_blocks.append(code_block[:])
 
-    return list_of_all_code_block_indices
+    return list_of_all_code_blocks
 
 
 def compute_return_variables(code_block, script):
@@ -202,18 +162,16 @@ def compute_parameters(code_block, all_possible_return_variables):
     return parameters
 
 
-def create_method(code_block, method_name, parameters, return_variables):
-    app.logger.info("Extract code block to separate function: %s" % method_name)
+def create_method(method_name, code_block, parameters, return_variables):
+    app.logger.info("Extract code block to separate function.")
 
     # Create new def node
     method = RedBaron("def " + method_name + "(" + ", ".join(parameters) + "):\n    pass")[0]
-    # Method cannot be empty during creation. Thus, pop the first line 'pass' now
+    # Method body cannot be empty during creation
     method.value.pop(0)
 
-    # Add all lines of code block to def node
-    for line in code_block:
-        app.logger.debug("Add line to method: %s" % repr(line.dumps()))
-        method.value.append(line)
+    for node in code_block:
+        method.value.append(node)
 
     # Add return statement
     if len(return_variables) > 0:

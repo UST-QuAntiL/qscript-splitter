@@ -95,13 +95,7 @@ def save_as_files(script_parts):
         app.logger.debug("Create result folder %s" % directory)
         os.makedirs(directory)
 
-    # Write base script to disk
-    with open(os.path.join(directory, 'base_script.py'), "w") as file:
-        app.logger.debug("Write base_script.py to %s" % directory)
-        file.write(script_parts['base_script.py'].dumps())
-        file.close()
-
-    # Write base script to disk
+    # Write workflow to disk
     with open(os.path.join(directory, 'workflow.json'), "w") as file:
         app.logger.debug("Write workflow.json to %s" % directory)
         file.write(json.dumps(script_parts['workflow.json']))
