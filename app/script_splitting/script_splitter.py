@@ -28,8 +28,17 @@ def split_script(script, requirements, splitting_labels):
 
     result_workflow = [{"type": "start"}]
     result = {'extracted_parts': []}
-    all_possible_return_variables = []
 
+    # Create preamble for base_script
+    base_script = None
+    for node in script:
+        if node.type in ['import', 'from_import']:
+            if base_script is None:
+                base_script = RedBaron(node.dumps())
+            else:
+                base_script.append(node.dumps())
+
+    all_possible_return_variables = []
     i = 0
     for code_block in code_blocks:
         i += 1
@@ -49,8 +58,10 @@ def split_script(script, requirements, splitting_labels):
         created_method = create_method(method_name, code_block, parameters, return_variables)
         part['app.py'] = created_method
 
-        # Copy imports to extracted files
+        # Copy requirements to extracted files
         part['requirements.txt'] = requirements
+
+        base_script.append(created_method)
 
         # Add task to 'workflow'
         result_workflow.append({"type": "task", "part": part['name']})
@@ -60,6 +71,7 @@ def split_script(script, requirements, splitting_labels):
 
     result_workflow.append({"type": "end"})
     result['workflow.json'] = result_workflow
+    result['base_script.py'] = base_script
 
     return result
 
@@ -169,7 +181,6 @@ def create_method(method_name, code_block, parameters, return_variables):
     # Create new def node
     method = RedBaron("def " + method_name + "(" + ", ".join(parameters) + "):\n    pass")[0]
     # Method body cannot be empty during creation
-    method.value = '1+1'
 
     for node in code_block:
         indent(node)
