@@ -86,8 +86,25 @@ def identify_code_blocks(script, splitting_labels):
             continue
         label = splitting_labels[node]
 
-        # Handle loops and if blocks (only if they are hybrid – otherwise they are labeled Quantum/Classical)
-        if label in [Labels.LOOP, Labels.IF_ELSE_BLOCK]:
+        # Handle loops (only if they are hybrid – otherwise they are labeled Quantum/Classical)
+        if label == Labels.LOOP:
+            # Close current code block and start new one
+            list_of_all_code_blocks.append(code_block[:])
+            code_block = []
+            # Compute code blocks recursively and add to result
+            sub_blocks = identify_code_blocks(node, splitting_labels)
+            list_of_all_code_blocks.extend(sub_blocks)
+            continue
+
+        # Handle if-else-blocks (only if they are hybrid - otherwise they are labels Quantum/Classical)
+        if label == Labels.IF_ELSE_BLOCK:
+            # Close current code block and start new one
+            list_of_all_code_blocks.append(code_block[:])
+            code_block = []
+            # Compute code blocks recursively and add to result
+            for block in node.value:
+                sub_blocks = identify_code_blocks(block, splitting_labels)
+                list_of_all_code_blocks.append(sub_blocks)
             continue
 
         if label == Labels.START_PREVENT_SPLIT:
@@ -181,6 +198,7 @@ def create_method(method_name, code_block, parameters, return_variables):
     # Create new def node
     method = RedBaron("def " + method_name + "(" + ", ".join(parameters) + "):\n    pass")[0]
     # Method body cannot be empty during creation
+    method.pop(0)
 
     for node in code_block:
         indent(node)
