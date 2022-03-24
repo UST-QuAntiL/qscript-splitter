@@ -20,7 +20,7 @@
 from app import app
 from redbaron import RedBaron
 from app.script_splitting.flattener import flatten
-from app.script_splitting.script_analyzer import get_labels
+from app.script_splitting.script_analyzer import ScriptAnalyzer
 from app.script_splitting.script_splitter import split_script
 import json
 import os
@@ -41,7 +41,8 @@ def do_the_split(qc_script_baron, requirements_file, knowledge_base_json):
 
     # Analyze the flattened script
     app.logger.info('Start analyzing script...')
-    map_labels = get_labels(flattened_file, white_list, black_list)
+    script_analyzer = ScriptAnalyzer(flattened_file, white_list, black_list)
+    map_labels = script_analyzer.get_labels()
 
     # Split the script
     app.logger.info('Start splitting script...')

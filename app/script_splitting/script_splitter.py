@@ -70,6 +70,8 @@ def identify_code_blocks(script, splitting_labels):
     current_label = None
     prevent_split = 0
     for node in script:
+        if node not in splitting_labels:
+            continue
         label = splitting_labels[node]
 
         # Handle loops and if blocks (only if they are hybrid – otherwise they are labeled Quantum/Classical)
@@ -185,7 +187,7 @@ def indent(node):
     try:
         node.increase_indentation(4)
     except AttributeError:
-        print(node.help())
+        pass
     if node.type in ['ifelseblock', 'if', 'elif', 'else', 'while', 'for']:
         for block in node.value:
             indent(block)
