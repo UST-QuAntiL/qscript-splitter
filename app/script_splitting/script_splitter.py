@@ -23,8 +23,6 @@ from app.script_splitting.Labels import Labels
 
 
 def split_script(script, requirements, splitting_labels):
-    for node in script:
-        app.logger.debug("%s: %s" % (splitting_labels[node], repr(node)))
 
     code_blocks = identify_code_blocks(script, splitting_labels)
 
@@ -74,6 +72,7 @@ def identify_code_blocks(script, splitting_labels):
     for node in script:
         label = splitting_labels[node]
 
+        # Handle loops and if blocks (only if they are hybrid – otherwise they are labeled Quantum/Classical)
         if label in [Labels.LOOP, Labels.IF_ELSE_BLOCK]:
             continue
 
@@ -168,14 +167,25 @@ def create_method(method_name, code_block, parameters, return_variables):
     # Create new def node
     method = RedBaron("def " + method_name + "(" + ", ".join(parameters) + "):\n    pass")[0]
     # Method body cannot be empty during creation
-    method.value.pop(0)
+    method.value = '1+1'
 
     for node in code_block:
-        method.value.append(node)
+        indent(node)
+        method.append(node)
 
     # Add return statement
     if len(return_variables) > 0:
         app.logger.debug("Add return statement to method")
-        method.value.append(RedBaron("return " + ", ".join(return_variables)))
+        method.append(RedBaron("return " + ", ".join(return_variables)))
 
-    return RedBaron(method)
+    return method
+
+
+def indent(node):
+    try:
+        node.increase_indentation(4)
+    except AttributeError:
+        print(node.help())
+    if node.type in ['ifelseblock', 'if', 'elif', 'else', 'while', 'for']:
+        for block in node.value:
+            indent(block)
