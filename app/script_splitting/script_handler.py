@@ -21,7 +21,7 @@ from app import app
 from redbaron import RedBaron
 from app.script_splitting.flattener import flatten
 from app.script_splitting.script_analyzer import ScriptAnalyzer
-from app.script_splitting.script_splitter import split_script
+from app.script_splitting.script_splitter import ScriptSplitter
 import json
 import os
 import zipfile
@@ -46,7 +46,8 @@ def do_the_split(qc_script_baron, requirements_file, knowledge_base_json):
 
     # Split the script
     app.logger.info('Start splitting script...')
-    script_parts = split_script(flattened_file, requirements_file, map_labels)
+    script_splitter = ScriptSplitter(flattened_file, requirements_file, map_labels)
+    script_parts = script_splitter.split_script()
 
     return script_parts
 
@@ -97,10 +98,10 @@ def save_as_files(script_parts):
         os.makedirs(directory)
 
     # Write base_script to disk
-    with open(os.path.join(directory, 'base_script.py'), "w") as file:
-        app.logger.debug("Write base_script.json to %s" % directory)
-        file.write(script_parts['base_script.py'].dumps())
-        file.close()
+    # with open(os.path.join(directory, 'base_script.py'), "w") as file:
+    #     app.logger.debug("Write base_script.json to %s" % directory)
+    #     file.write(script_parts['base_script.py'].dumps())
+    #     file.close()
 
     # Write workflow to disk
     with open(os.path.join(directory, 'workflow.json'), "w") as file:

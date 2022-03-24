@@ -17,152 +17,201 @@
 #  limitations under the License.
 # ******************************************************************************
 
-from app import app
+import random
+import string
+
 from redbaron import RedBaron
+
+from app import app
 from app.script_splitting.Labels import Labels
 
 
-def split_script(script, requirements, splitting_labels):
+class ScriptSplitter:
 
-    code_blocks = identify_code_blocks(script, splitting_labels)
-
-    result_workflow = [{"type": "start"}]
-    result = {'extracted_parts': []}
-
-    # Create preamble for base_script
-    base_script = None
-    for node in script:
-        if node.type in ['import', 'from_import']:
-            if base_script is None:
-                base_script = RedBaron(node.dumps())
-            else:
-                base_script.append(node.dumps())
-
+    ROOT_SCRIPT = None
+    REQUIREMENTS = None
+    SPLITTING_LABELS = None
+    integrated_blocks = []
     all_possible_return_variables = []
-    i = 0
-    for code_block in code_blocks:
-        i += 1
-        part = {'name': "part_" + str(i)}
+
+    def __init__(self, script, requirements, splitting_labels):
+        self.ROOT_SCRIPT = script
+        self.REQUIREMENTS = requirements
+        self.SPLITTING_LABELS = splitting_labels
+
+    def split_script(self):
+        code_blocks = self.identify_code_blocks(self.ROOT_SCRIPT)
+
+        result_workflow = [{"type": "start"}]
+        script_parts = self.build_base_script(self.ROOT_SCRIPT, code_blocks, result_workflow)
+        result_workflow.append({"type": "end"})
+
+        for x in result_workflow:
+            print(x)
+
+        return {'extracted_parts': script_parts, 'workflow.json': result_workflow}
+
+    def build_base_script(self, nodes, code_blocks, result_workflow):
+        script_parts = []
+        for node in nodes:
+            # if node is not in any code block
+            if which_code_block(node, code_blocks) == -1:
+                if node in self.SPLITTING_LABELS and self.SPLITTING_LABELS[node] == Labels.LOOP:
+                    if node.type == "while":
+                        result_workflow.append({"type": "start_while", "condition": node.test.dumps()})
+                        sub_parts = self.build_base_script(node, code_blocks, result_workflow)
+                        script_parts.extend(sub_parts)
+                        result_workflow.append({"type": "end_while"})
+                    elif node.type == "for":
+                        result_workflow.append({"type": "start_for", "iterator": node.iterator.dumps(), "in": node.target.dumps()})
+                        sub_parts = self.build_base_script(node, code_blocks, result_workflow)
+                        script_parts.extend(sub_parts)
+                        result_workflow.append({"type": "end_for"})
+                elif node in self.SPLITTING_LABELS and self.SPLITTING_LABELS[node] == Labels.IF_ELSE_BLOCK:
+                    for block in node.value:
+                        if block.type == "if":
+                            result_workflow.append({"type": "start_if", "condition": block.test.dumps()})
+                        elif block.type == "elif":
+                            result_workflow.append({"type": "else_if", "condition": block.test.dumps()})
+                        elif block.type == "else":
+                            result_workflow.append({"type": "else"})
+                        sub_parts = self.build_base_script(block, code_blocks, result_workflow)
+                        script_parts.extend(sub_parts)
+                    result_workflow.append({"type": "end_if"})
+                else:
+                    pass
+            else:
+                code_block = code_blocks[which_code_block(node, code_blocks)]
+                if code_block not in self.integrated_blocks:
+                    part = self.gen_method_from_block(code_block)
+                    script_parts.append(part)
+                    result_workflow.append({"type": "task", "file": part['name']})
+                self.integrated_blocks.append(code_block)
+        return script_parts
+
+    def gen_method_from_block(self, code_block):
+        part = {'name': "part_" + ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))}
 
         # Compute list of parameters
-        parameters = compute_parameters(code_block, all_possible_return_variables)
-        app.logger.info("Call arguments for code block %s: %s" % (i, parameters))
+        parameters = self.compute_parameters(code_block)
+        app.logger.info("Call arguments for code block: %s" % parameters)
 
         # Compute list of return variables
-        return_variables = compute_return_variables(code_block, script)
-        all_possible_return_variables.extend(return_variables)
-        app.logger.info("Return arguments for code block %s: %s" % (i, return_variables))
+        return_variables = self.compute_return_variables(code_block)
+        self.all_possible_return_variables.extend(return_variables)
 
         # Generate new method from code block and append to result script
         method_name = "main"
         created_method = create_method(method_name, code_block, parameters, return_variables)
         part['app.py'] = created_method
 
-        # Copy requirements to extracted files
-        part['requirements.txt'] = requirements
+        part['requirements.txt'] = self.REQUIREMENTS
 
-        base_script.append(created_method)
+        return part
 
-        # Add task to 'workflow'
-        result_workflow.append({"type": "task", "part": part['name']})
+    def identify_code_blocks(self, nodes):
+        list_of_all_code_blocks = []
+        code_block = []
+        current_label = None
+        prevent_split = 0
+        for node in nodes:
+            if node not in self.SPLITTING_LABELS:
+                continue
+            label = self.SPLITTING_LABELS[node]
 
-        # Add part to result
-        result['extracted_parts'].append(part)
-
-    result_workflow.append({"type": "end"})
-    result['workflow.json'] = result_workflow
-    result['base_script.py'] = base_script
-
-    return result
-
-
-def identify_code_blocks(script, splitting_labels):
-    list_of_all_code_blocks = []
-    code_block = []
-    current_label = None
-    prevent_split = 0
-    for node in script:
-        if node not in splitting_labels:
-            continue
-        label = splitting_labels[node]
-
-        # Handle loops (only if they are hybrid – otherwise they are labeled Quantum/Classical)
-        if label == Labels.LOOP:
-            # Close current code block and start new one
-            list_of_all_code_blocks.append(code_block[:])
-            code_block = []
-            # Compute code blocks recursively and add to result
-            sub_blocks = identify_code_blocks(node, splitting_labels)
-            list_of_all_code_blocks.extend(sub_blocks)
-            continue
-
-        # Handle if-else-blocks (only if they are hybrid - otherwise they are labels Quantum/Classical)
-        if label == Labels.IF_ELSE_BLOCK:
-            # Close current code block and start new one
-            list_of_all_code_blocks.append(code_block[:])
-            code_block = []
-            # Compute code blocks recursively and add to result
-            for block in node.value:
-                sub_blocks = identify_code_blocks(block, splitting_labels)
-                list_of_all_code_blocks.append(sub_blocks)
-            continue
-
-        if label == Labels.START_PREVENT_SPLIT:
-            prevent_split = 2
-            continue
-        if label == Labels.END_PREVENT_SPLIT:
-            prevent_split = 0
-            continue
-        # Skip imports
-        if label == Labels.IMPORTS:
-            continue
-        # Add empty lines to code block, too
-        if label == Labels.NO_CODE:
-            # code_block_indices.append(i)
-            continue
-
-        # Tag label of first block
-        if current_label is None:
-            current_label = label
-
-        # Start new code block if label changes
-        # Only for first line in protected block (prevent_split == 2) or outside protected block (prevented_split <= 0)
-        if prevent_split != 1:
-            prevent_split -= 1
-            if len(code_block) > 0 and (label == Labels.FORCE_SPLIT or label != current_label):
+            # Handle loops (only if they are hybrid – otherwise they are labeled Quantum/Classical)
+            if label == Labels.LOOP:
+                # Close current code block and start new one
                 list_of_all_code_blocks.append(code_block[:])
                 code_block = []
-            if label == Labels.FORCE_SPLIT:
-                current_label = None
-            else:
+                # Compute code blocks recursively and add to result
+                sub_blocks = self.identify_code_blocks(node)
+                list_of_all_code_blocks.extend(sub_blocks)
+                continue
+
+            # Handle if-else-blocks (only if they are hybrid - otherwise they are labels Quantum/Classical)
+            if label == Labels.IF_ELSE_BLOCK:
+                # Close current code block and start new one
+                list_of_all_code_blocks.append(code_block[:])
+                code_block = []
+                # Compute code blocks recursively and add to result
+                for block in node.value:
+                    sub_blocks = self.identify_code_blocks(block)
+                    list_of_all_code_blocks.extend(sub_blocks)
+                continue
+
+            if label == Labels.START_PREVENT_SPLIT:
+                prevent_split = 2
+                continue
+            if label == Labels.END_PREVENT_SPLIT:
+                prevent_split = 0
+                continue
+            # Skip imports
+            if label == Labels.IMPORTS:
+                continue
+            # Add empty lines to code block, too
+            if label == Labels.NO_CODE:
+                # code_block_indices.append(i)
+                continue
+
+            # Tag label of first block
+            if current_label is None:
                 current_label = label
 
-        # Add line to code block
-        code_block.append(node)
+            # Start new code block if label changes but only for first line in protected block (prevent_split == 2)
+            # or outside protected block (prevented_split <= 0)
+            if prevent_split != 1:
+                prevent_split -= 1
+                if len(code_block) > 0 and (label == Labels.FORCE_SPLIT or label != current_label):
+                    list_of_all_code_blocks.append(code_block[:])
+                    code_block = []
+                if label == Labels.FORCE_SPLIT:
+                    current_label = None
+                else:
+                    current_label = label
 
-    # Add last code block
-    list_of_all_code_blocks.append(code_block[:])
+            # Add line to code block
+            code_block.append(node)
 
-    return list_of_all_code_blocks
+        # Add last code block
+        list_of_all_code_blocks.append(code_block[:])
 
+        return list_of_all_code_blocks
 
-def compute_return_variables(code_block, script):
-    remaining_block = script[:]
-    # TODO pop code_block
+    def compute_return_variables(self, code_block):
+        # TODO check recursively
+        initialized_variables = []
+        for line in code_block:
+            if line.type == "assignment":
+                initialized_variables.append(str(line.target.name))
 
-    # TODO check recursively
-    initialized_variables = []
-    for line in code_block:
-        if line.type == "assignment":
-            initialized_variables.append(str(line.target.name))
+        result = []
+        for line in self.ROOT_SCRIPT:
+            for variable in initialized_variables:
+                if is_used_in_line(variable, line) and str(variable) not in result:
+                    result.append(str(variable))
 
-    result = []
-    for line in remaining_block:
-        for variable in initialized_variables:
-            if is_used_in_line(variable, line) and str(variable) not in result:
-                result.append(str(variable))
+        return result
 
-    return result
+    def compute_parameters(self, code_block):
+        parameters = []
+
+        # TODO: Bug if a line.value is a simple int or string, recursive call will result in wrong type which is not
+        #  indexable
+        for line in code_block:
+            if line.type == "assignment":
+                param_list = self.compute_parameters(line.value)
+                for element in param_list:
+                    if element not in parameters:
+                        parameters.append(element)
+                continue
+            if line.type in ['comment', 'endl', 'import']:
+                continue
+            for variable in self.all_possible_return_variables:
+                if is_used_in_line(variable, line) and str(variable) not in parameters:
+                    parameters.append(str(variable))
+
+        return parameters
 
 
 def is_used_in_line(variable, line):
@@ -170,26 +219,6 @@ def is_used_in_line(variable, line):
     # TODO: NameNode includes function calls as well, thus, only search for variables.
     #  The current implementation, however, might return unnecessary variables as well.
     return len(found) > 0
-
-
-def compute_parameters(code_block, all_possible_return_variables):
-    parameters = []
-
-    # TODO: Bug if a line.value is a simple int or string, recursive call will result in wrong type which is not indexable
-    for line in code_block:
-        if line.type == "assignment":
-            param_list = compute_parameters(line.value, all_possible_return_variables)
-            for element in param_list:
-                if element not in parameters:
-                    parameters.append(element)
-            continue
-        if line.type in ['comment', 'endl', 'import']:
-            continue
-        for variable in all_possible_return_variables:
-            if is_used_in_line(variable, line) and str(variable) not in parameters:
-                parameters.append(str(variable))
-
-    return parameters
 
 
 def create_method(method_name, code_block, parameters, return_variables):
@@ -220,3 +249,10 @@ def indent(node):
     if node.type in ['ifelseblock', 'if', 'elif', 'else', 'while', 'for']:
         for block in node.value:
             indent(block)
+
+
+def which_code_block(node, code_blocks):
+    for i in range(len(code_blocks)):
+        if node in code_blocks[i]:
+            return i
+    return -1

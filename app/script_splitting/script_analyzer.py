@@ -28,7 +28,6 @@ class ScriptAnalyzer:
     WHITE_LIST = None
     BLACK_LIST = None
 
-    # constructor
     def __init__(self, script, white_list, black_list):
         self.ROOT_SCRIPT = script
         self.WHITE_LIST = white_list
