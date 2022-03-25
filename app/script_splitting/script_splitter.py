@@ -99,9 +99,8 @@ class ScriptSplitter:
     def gen_iterator(self, list):
         iterator_name = "it_" + ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
 
-        basedir = os.path.join(os.path.abspath(os.path.dirname(__file__)), "templates", "iterator_script.js")
-
-        with open(basedir, "r") as file:
+        iterator_template_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "templates", "iterator_script.js")
+        with open(iterator_template_path, "r") as file:
             iterator_template = file.read()
         iterator_template = iterator_template.replace("### LIST ###", list)
         iterator_template = iterator_template.replace("### ITERATOR VARIABLE ###", iterator_name + "_var")

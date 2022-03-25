@@ -26,6 +26,7 @@ import json
 import os
 import zipfile
 import urllib.request
+import shutil
 from rq import get_current_job
 
 
@@ -130,6 +131,9 @@ def save_as_files(script_parts):
             app.logger.debug("Write requirements.txt to %s" % part_directory)
             file.write(part['requirements.txt'])
             file.close()
+        # Copy Dockerfile
+        source_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "templates", "Dockerfile")
+        shutil.copyfile(source_path, os.path.join(part_directory, "Dockerfile"))
 
     return directory
 
