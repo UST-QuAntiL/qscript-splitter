@@ -200,10 +200,11 @@ class ScriptSplitter:
         #  indexable
         for line in code_block:
             if line.type == "assignment":
-                param_list = self.compute_parameters(line.value)
-                for element in param_list:
-                    if element not in parameters:
-                        parameters.append(element)
+                if line.value is list:
+                    param_list = self.compute_parameters(line.value)
+                    for element in param_list:
+                        if element not in parameters:
+                            parameters.append(element)
                 continue
             if line.type in ['comment', 'endl', 'import']:
                 continue
