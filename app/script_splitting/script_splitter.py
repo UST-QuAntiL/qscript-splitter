@@ -19,6 +19,7 @@
 
 import random
 import string
+import os
 
 from redbaron import RedBaron
 
@@ -33,6 +34,7 @@ class ScriptSplitter:
     SPLITTING_LABELS = None
     integrated_blocks = []
     all_possible_return_variables = []
+    iterators = []
 
     def __init__(self, script, requirements, splitting_labels):
         self.ROOT_SCRIPT = script
@@ -42,14 +44,14 @@ class ScriptSplitter:
     def split_script(self):
         code_blocks = self.identify_code_blocks(self.ROOT_SCRIPT)
 
-        result_workflow = [{"type": "start"}]
+        result_workflow = [{"type": "start", "variables": []}]
         script_parts = self.build_base_script(self.ROOT_SCRIPT, code_blocks, result_workflow)
         result_workflow.append({"type": "end"})
 
         for x in result_workflow:
             print(x)
 
-        return {'extracted_parts': script_parts, 'workflow.json': result_workflow}
+        return {'extracted_parts': script_parts, 'workflow.json': result_workflow, 'iterators': self.iterators}
 
     def build_base_script(self, nodes, code_blocks, result_workflow):
         script_parts = []
@@ -63,7 +65,12 @@ class ScriptSplitter:
                         script_parts.extend(sub_parts)
                         result_workflow.append({"type": "end_while"})
                     elif node.type == "for":
-                        result_workflow.append({"type": "start_for", "iterator": node.iterator.dumps(), "in": node.target.dumps()})
+                        iterator = self.gen_iterator(node.target.dumps())
+                        result_workflow[0]['variables'].append(iterator['name'] + "_var")
+                        result_workflow[0]['variables'].append(iterator['name'] + "_elem")
+                        result_workflow.append({"type": "start_for", "iterator": iterator['name']})
+                        self.iterators.append(iterator)
+                        result_workflow.append({"type": "script_task", "file": iterator['name']+".js"})
                         sub_parts = self.build_base_script(node, code_blocks, result_workflow)
                         script_parts.extend(sub_parts)
                         result_workflow.append({"type": "end_for"})
@@ -88,6 +95,19 @@ class ScriptSplitter:
                     result_workflow.append({"type": "task", "file": part['name']})
                 self.integrated_blocks.append(code_block)
         return script_parts
+
+    def gen_iterator(self, list):
+        iterator_name = "it_" + ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
+
+        basedir = os.path.join(os.path.abspath(os.path.dirname(__file__)), "templates", "iterator_script.js")
+
+        with open(basedir, "r") as file:
+            iterator_template = file.read()
+        iterator_template = iterator_template.replace("### LIST ###", list)
+        iterator_template = iterator_template.replace("### ITERATOR VARIABLE ###", iterator_name + "_var")
+        iterator_template = iterator_template.replace("### ITERATOR ELEMENT ###", iterator_name + "_elem")
+
+        return {'name': iterator_name, 'file': iterator_template}
 
     def gen_method_from_block(self, code_block):
         part = {'name': "part_" + ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))}

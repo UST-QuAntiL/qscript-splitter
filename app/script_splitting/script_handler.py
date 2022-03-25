@@ -97,17 +97,21 @@ def save_as_files(script_parts):
         app.logger.debug("Create result folder %s" % directory)
         os.makedirs(directory)
 
-    # Write base_script to disk
-    # with open(os.path.join(directory, 'base_script.py'), "w") as file:
-    #     app.logger.debug("Write base_script.json to %s" % directory)
-    #     file.write(script_parts['base_script.py'].dumps())
-    #     file.close()
-
     # Write workflow to disk
     with open(os.path.join(directory, 'workflow.json'), "w") as file:
         app.logger.debug("Write workflow.json to %s" % directory)
         file.write(json.dumps(script_parts['workflow.json']))
         file.close()
+
+    # Write iterators to disk
+    iterators_directory = os.path.join(directory, 'iterators')
+    if not os.path.exists(iterators_directory):
+        app.logger.debug("Create 'iterators' folder %s" % iterators_directory)
+        os.makedirs(iterators_directory)
+    for iterator in script_parts['iterators']:
+        with open(os.path.join(iterators_directory, iterator['name'] + ".js"), "w") as file:
+            file.write(iterator['file'])
+            file.close()
 
     # Save extracted parts to separate subdirectories
     for part in script_parts['extracted_parts']:
