@@ -117,7 +117,7 @@ def save_as_files(script_parts):
     # Save extracted parts to separate subdirectories
     for part in script_parts['extracted_parts']:
         # Create subdirectory
-        part_directory = os.path.join(directory, part['name'])
+        part_directory = os.path.join(directory, part['name'], "service")
         if not os.path.exists(part_directory):
             app.logger.debug("Create 'part' folder %s" % part_directory)
             os.makedirs(part_directory)
@@ -131,9 +131,16 @@ def save_as_files(script_parts):
             app.logger.debug("Write requirements.txt to %s" % part_directory)
             file.write(part['requirements.txt'])
             file.close()
+
+        # Zip contents so far
+        zip_path = os.path.join(directory, part['name'], "service.zip")
+        zip_file = zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED)
+        zip_directory(part_directory, zip_file)
+        zip_file.close()
+
         # Copy Dockerfile
         source_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "templates", "Dockerfile")
-        shutil.copyfile(source_path, os.path.join(part_directory, "Dockerfile"))
+        shutil.copyfile(source_path, os.path.join(os.path.join(directory, part['name']), "Dockerfile"))
 
     return directory
 
