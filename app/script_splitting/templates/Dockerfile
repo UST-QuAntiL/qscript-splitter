@@ -10,4 +10,4 @@ RUN unzip /tmp/service.zip -d /
 RUN pip install requests qiskit==0.32.1
 RUN pip install -r service/requirements.txt
 
-CMD python service/app.py
+CMD python service/polling_agent.py
