@@ -37,25 +37,29 @@ class ScriptAnalyzer:
         script = self.ROOT_SCRIPT[:]
 
         # Get Initial labels
-        labels = self.get_initial_labels(script)
+        labels = self.get_initial_labels(self.ROOT_SCRIPT)
         app.logger.debug("Initial Labels: %s" % labels)
 
         for key, value in labels.items():
-            print("LABEL: %s for %s" % (value, repr(key.dumps())))
+            print("LABEL: %s - %s" % (value, repr(key.dumps())))
 
         # If code blocks (ifs, whiles, etc.) are not hybrid, their explicit label is changed to QUANTUM/CLASSICAL
-        relabel_code_blocks_if_not_hybrid(script, labels)
-        app.logger.debug("Labels after relabeling: %s" % labels)
+        dirty = True
+        max_iterations = 0
+        while dirty and max_iterations < 10:
+            relabel_code_blocks_if_not_hybrid(self.ROOT_SCRIPT, labels)
+            print("\nLabels after relabeling: %s" % labels)
+            for key, value in labels.items():
+                print("LABEL: %s - %s" % (value, repr(key.dumps())))
 
-        for key, value in labels.items():
-            print("LABEL: %s for %s" % (value, repr(key.dumps())))
+            # Apply threshold to labels
+            dirty = apply_threshold(self.ROOT_SCRIPT, labels)
+            print("\nLabels after applying threshold: %s" % labels)
 
-        # Apply threshold to labels
-        apply_threshold(script, labels)
-        app.logger.debug("Labels after applying threshold: %s" % labels)
+            for key, value in labels.items():
+                print("LABEL: %s - %s" % (value, repr(key.dumps())))
 
-        for key, value in labels.items():
-            print("LABEL: %s for %s" % (value, repr(key.dumps())))
+            max_iterations += 1
 
         return labels
 
@@ -222,33 +226,39 @@ def is_in_knowledge_base(package_orig, knowledge_base):
     return False
 
 
-def relabel_code_blocks_if_not_hybrid(script, splitting_labels):
+def relabel_code_blocks_if_not_hybrid(script, splitting_labels, parent=None):
+    found_quantum = False
+    found_classical = False
     for node in script:
-        if node.type in ["ifelseblock", "for", "while"]:
-            found_quantum = contains_any(node, splitting_labels, Labels.QUANTUM)
-            found_classical = contains_any(node, splitting_labels, Labels.CLASSICAL)
-            if found_quantum and not found_classical:
-                splitting_labels[node] = Labels.QUANTUM
-            elif found_classical and not found_quantum:
-                splitting_labels[node] = Labels.CLASSICAL
+        # Handle ifs recursively
+        if splitting_labels[node] == Labels.IF_ELSE_BLOCK:
+            for block in node.value:
+                relabel_code_blocks_if_not_hybrid(block, splitting_labels, node)
+        # Handle loops recursively
+        elif splitting_labels[node] == Labels.LOOP:
+            relabel_code_blocks_if_not_hybrid(node.value, splitting_labels, node)
 
+        # If any one node in the list is Quantum/Classical, set found_quantum/found_classical to true
+        if not found_quantum and node in splitting_labels and splitting_labels[node] == Labels.QUANTUM:
+            found_quantum = True
+        elif not found_classical and node in splitting_labels and splitting_labels[node] == Labels.CLASSICAL:
+            found_classical = True
 
-def contains_any(node, splitting_labels, label):
-    if node.type == 'ifelseblock':
-        for block in node.value:
-            for n in block.value:
-                if contains_any(n, splitting_labels, label):
-                    return True
-    elif node.type in ['while', 'for']:
-        for n in node.value:
-            if contains_any(n, splitting_labels, label):
-                return True
-
-    return node in splitting_labels and splitting_labels[node] == label
+    # False for the first iteration where parent is root
+    if parent is not None and parent in splitting_labels:
+        # Relabel if only quantum labels were found
+        if found_quantum and not found_classical:
+            app.logger.debug('Relabel %s from %s to QUANTUM since it only contains quantum nodes' % (repr(parent.dumps()), splitting_labels[parent]))
+            splitting_labels[parent] = Labels.QUANTUM
+        # Relabel if only classical labels were found
+        elif found_classical and not found_quantum:
+            app.logger.debug('Relabel %s from %s to CLASSICAL since it only contains classical nodes' % (repr(parent.dumps()), splitting_labels[parent]))
+            splitting_labels[parent] = Labels.CLASSICAL
 
 
 def apply_threshold(script, splitting_labels):
     app.logger.debug("Start relabeling with threshold=%s..." % app.config["SPLITTING_THRESHOLD"])
+    result = False
 
     # Calculate number of classical lines before each quantum block and relabel if it is smaller than threshold
     classical_nodes = []
@@ -257,17 +267,17 @@ def apply_threshold(script, splitting_labels):
         # Handle if-else-blocks recursively. Do not relabel preceding classical.
         if splitting_labels[node] == Labels.IF_ELSE_BLOCK:
             for block in node.value:
-                apply_threshold(block.value, splitting_labels)
+                result = result or apply_threshold(block.value, splitting_labels)
             classical_nodes = []
 
         # Handle while-/for-blocks recursively. Do not relabel preceding classical.
         if splitting_labels[node] == Labels.LOOP:
-            apply_threshold(node.value, splitting_labels)
+            result = result or apply_threshold(node.value, splitting_labels)
             classical_nodes = []
 
         # If a quantum label if found, relabel preceding classical nodes (when threshold is missed)
         if splitting_labels[node] == Labels.QUANTUM:
-            relabel_if_threshold_not_reached(classical_nodes, splitting_labels)
+            result = result or relabel_if_threshold_not_reached(classical_nodes, splitting_labels)
             classical_nodes = []
             any_quantum = True
 
@@ -278,10 +288,13 @@ def apply_threshold(script, splitting_labels):
     # Calculate number of trailing classical lines and relabel if it is smaller than threshold.
     # For code blocks only containing classical elements, any_quantum is False.
     if any_quantum:
-        relabel_if_threshold_not_reached(classical_nodes, splitting_labels)
+        result = result or relabel_if_threshold_not_reached(classical_nodes, splitting_labels)
+
+    return result
 
 
 def relabel_if_threshold_not_reached(classical_nodes, splitting_labels):
+    result = False
     # Code blocks (ifs, whiles, etc.) also have additional code lines counted for threshold
     weight = 0
     for node in classical_nodes:
@@ -290,19 +303,22 @@ def relabel_if_threshold_not_reached(classical_nodes, splitting_labels):
     # Relabel classical nodes if threshold is not reached
     if 0 < weight < app.config["SPLITTING_THRESHOLD"]:
         for node in classical_nodes:
-            relabel(node, splitting_labels)
+            if node in splitting_labels and splitting_labels[node] != Labels.QUANTUM:
+                relabel(node, splitting_labels)
+                result = True
+    return result
 
 
 def relabel(node, splitting_labels):
     splitting_labels[node] = Labels.QUANTUM
     # Relabel if-else-blocks recursively
-    if node.type == 'ifelseblock':
+    if splitting_labels[node] == Labels.IF_ELSE_BLOCK:
         for block in node.value:
             for x in block.value:
                 if x in splitting_labels:
                     relabel(x, splitting_labels)
     # Relabel while-/for-blocks recursively
-    if node.type in ['while', 'for']:
+    if splitting_labels[node] == Labels.LOOP:
         for block in node.value:
             if block in splitting_labels:
                 relabel(block, splitting_labels)

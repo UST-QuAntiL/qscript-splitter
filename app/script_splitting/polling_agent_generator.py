@@ -27,3 +27,4 @@ def generate_polling_agent(parameters, return_values):
     content = content.replace("### CALL SCRIPT PART ###", "print('load input variables')")
     content = content.replace('### STORE OUTPUT DATA SECTION ###', "print('write output variables to disk')")
     return content
+
