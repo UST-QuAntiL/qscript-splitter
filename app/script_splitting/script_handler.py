@@ -114,11 +114,6 @@ def save_as_files(script_parts):
             file.write(iterator['file'])
             file.close()
 
-    # Read from polling agent template
-    polling_agent_template_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "templates", "polling_agent_template.py")
-    with open(polling_agent_template_path, "r") as template:
-        polling_agent_template  = template.read()
-
     # Save extracted parts to separate subdirectories
     for part in script_parts['extracted_parts']:
         # Create subdirectory
@@ -139,9 +134,8 @@ def save_as_files(script_parts):
 
         # Add polling agent
         with open(os.path.join(part_directory, "polling_agent.py"), "w") as file:
-            # TODO
-            polling_agent = polling_agent_template.replace("", "")
-            file.write(polling_agent)
+            app.logger.debug("Write polling_agent.py to %s" % part_directory)
+            file.write(part['polling_agent.py'])
 
         # Zip contents so far
         zip_path = os.path.join(directory, part['name'], "service.zip")

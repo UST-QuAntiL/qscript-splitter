@@ -25,6 +25,7 @@ from redbaron import RedBaron
 
 from app import app
 from app.script_splitting.Labels import Labels
+from app.script_splitting.polling_agent_generator import generate_polling_agent
 
 
 class ScriptSplitter:
@@ -125,6 +126,8 @@ class ScriptSplitter:
         part['app.py'] = created_method
 
         part['requirements.txt'] = self.REQUIREMENTS
+
+        part['polling_agent.py'] = generate_polling_agent(parameters, return_variables)
 
         return part
 

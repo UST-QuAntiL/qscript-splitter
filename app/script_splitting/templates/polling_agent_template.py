@@ -20,15 +20,9 @@
 import threading
 import base64
 import os
-import zipfile
-from tempfile import mkdtemp
 
 import requests
 from urllib.request import urlopen
-
-def function_1to10():
-    #doSomething
-    pass
 
 
 def poll():
@@ -52,10 +46,10 @@ def poll():
                 variables = externalTask.get('variables')
                 if externalTask.get('topicName') == topic:
                     # load input data
-                    ##### CALL SCRIPT PART ####
+                    ### CALL SCRIPT PART ###
 
                     # encode parameters as files due to the string size limitation of camunda
-                    ##### STORE OUTPUT DATA SECTION ####
+                    ### STORE OUTPUT DATA SECTION ###
 
                     # send response
                     body = {}
