@@ -31,6 +31,9 @@ import shutil
 def split_qc_script():
     """Put QC script split job in queue. Return location of the later result."""
 
+    # Set splitting threshold if it is contained in request
+    app.config['SPLITTING_THRESHOLD'] = request.form.get('splitting_threshold', app.config['SPLITTING_THRESHOLD'])
+
     # Clear working directories
     if app.config['CLEAR_FILES_ON_NEW_REQUEST']:
         if os.path.exists(app.config['UPLOAD_FOLDER']):

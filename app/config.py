@@ -34,7 +34,7 @@ class Config(object):
     KNOWLEDGE_BASE_FOLDER = os.environ.get('KNOWLEDGE_BASE_FOLDER') or os.path.join(basedir, 'knowledge_base')
 
     # Number of consecutive lines of classical code allowed in quantum parts
-    SPLITTING_THRESHOLD = 2
+    SPLITTING_THRESHOLD = os.environ.get('SPLITTING_THRESHOLD') or 5
 
     # Clear upload and result folders first (for debugging purposes)
     CLEAR_FILES_ON_NEW_REQUEST = os.environ.get('CLEAR_FILES_ON_NEW_REQUEST') or False
