@@ -4,7 +4,7 @@ const iterator_element = '### ITERATOR ELEMENT ###';
 
 iterator = parseInt(execution.getVariable(iterator_variable));
 if (iterator == null) {
-    iterator = 0
+    iterator = 0;
 }
 iterator++;
 execution.setVariable(iterator_variable, iterator);

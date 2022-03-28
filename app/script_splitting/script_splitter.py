@@ -71,7 +71,7 @@ class ScriptSplitter:
                         result_workflow[0]['variables'].append(iterator['name'] + "_elem")
                         result_workflow.append({"type": "start_for", "iterator": iterator['name']})
                         self.iterators.append(iterator)
-                        result_workflow.append({"type": "script_task", "file": iterator['name']+".js"})
+                        result_workflow.append({"type": "iterator_script", "file": iterator['name']+".js"})
                         sub_parts = self.build_base_script(node, code_blocks, result_workflow)
                         script_parts.extend(sub_parts)
                         result_workflow.append({"type": "end_for"})
