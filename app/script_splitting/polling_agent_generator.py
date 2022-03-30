@@ -24,7 +24,26 @@ def generate_polling_agent(parameters, return_values):
     polling_agent_template_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "templates", "polling_agent_template.py")
     with open(polling_agent_template_path, "r") as template:
         content = template.read()
-    content = content.replace("### CALL SCRIPT PART ###", "print('load input variables')")
-    content = content.replace('### STORE OUTPUT DATA SECTION ###', "print('write output variables to disk')")
+
+    load_input_data = content.find("")
+
+    #content = content.replace('### STORE OUTPUT DATA SECTION ###', "print('write output variables to disk')")
+
+    load_data_str = ''
+    for inputParameter in parameters:
+        load_data_str += '\n'
+        load_data_str += '                    if variables.get("' + inputParameter + '").get("type") == "String":\n'
+        load_data_str += '                        ' + inputParameter + ' = variables.get("' + inputParameter + '").get("value")\n'
+        load_data_str += '                    else:\n'
+        load_data_str += '                        ' + inputParameter + ' = download_data(camundaEndpoint + "/process-instance/" + externalTask.get("processInstanceId") + "/variables/' + inputParameter + '/data")'
+
+    content = content.replace("### LOAD INPUT DATA ###", load_data_str)
+
+    call_str = ", ".join(return_values)
+    if len(return_values) > 0:
+        call_str += " = "
+    call_str += "app.main(" + ", ".join(parameters) + ")"
+    content = content.replace("### CALL SCRIPT PART ###", call_str)
+
     return content
 

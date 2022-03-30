@@ -23,6 +23,7 @@ import os
 
 import requests
 from urllib.request import urlopen
+import app
 
 
 def poll():
@@ -45,7 +46,8 @@ def poll():
                 print('External task with ID for topic ' + str(externalTask.get('topicName')) + ': ' + str(externalTask.get('id')))
                 variables = externalTask.get('variables')
                 if externalTask.get('topicName') == topic:
-                    # load input data
+                    ### LOAD INPUT DATA ###
+
                     ### CALL SCRIPT PART ###
 
                     # encode parameters as files due to the string size limitation of camunda

@@ -32,6 +32,7 @@ def split_qc_script():
     """Put QC script split job in queue. Return location of the later result."""
 
     # Set splitting threshold if it is contained in request
+    # TODO that is not working for the task-worker!
     app.config['SPLITTING_THRESHOLD'] = request.form.get('splitting_threshold', app.config['SPLITTING_THRESHOLD'])
 
     # Clear working directories
