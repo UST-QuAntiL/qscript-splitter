@@ -32,8 +32,7 @@ def split_qc_script():
     """Put QC script split job in queue. Return location of the later result."""
 
     # Set splitting threshold if it is contained in request
-    # TODO that is not working for the task-worker!
-    app.config['SPLITTING_THRESHOLD'] = request.form.get('splitting_threshold', app.config['SPLITTING_THRESHOLD'])
+    threshold = request.form.get('splitting_threshold', app.config['SPLITTING_THRESHOLD'])
 
     # Clear working directories
     if app.config['CLEAR_FILES_ON_NEW_REQUEST']:
@@ -68,7 +67,7 @@ def split_qc_script():
     app.logger.info('Knowledge base available via URL: ' + str(kb_url))
 
     # Execute job asynchronously
-    job = app.queue.enqueue('app.tasks.qc_script_splitting_task', qc_script_url=script_url, requirements_url=rq_url, knowledge_base_url=kb_url, job_timeout=18000)
+    job = app.queue.enqueue('app.tasks.qc_script_splitting_task', qc_script_url=script_url, requirements_url=rq_url, knowledge_base_url=kb_url, threshold=threshold, job_timeout=18000)
     app.logger.info('Added job for qc script splitting to the queue...')
     result = Result(id=job.get_id())
     db.session.add(result)
