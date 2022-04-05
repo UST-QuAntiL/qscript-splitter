@@ -58,8 +58,8 @@ def poll():
                     response = requests.post(pollingEndpoint + '/' + externalTask.get('id') + '/complete', json=body)
                     print('Status code of response message: ' + str(response.status_code))
 
-    except Exception:
-        print('Exception during polling!')
+    except Exception as err:
+        print('Exception during polling: ', err)
 
     threading.Timer(8, poll).start()
 
