@@ -36,6 +36,7 @@ class ScriptSplitter:
     integrated_blocks = []
     all_possible_return_variables = []
     iterators = []
+    all_imports =[]
 
     def __init__(self, script, requirements, splitting_labels):
         self.ROOT_SCRIPT = script
@@ -44,6 +45,9 @@ class ScriptSplitter:
 
     def split_script(self):
         code_blocks = self.identify_code_blocks(self.ROOT_SCRIPT)
+        for line in self.ROOT_SCRIPT:
+            if self.SPLITTING_LABELS[line] == Labels.IMPORTS:
+                self.all_imports.append(line)
 
         result_workflow = [{"type": "start", "variables": []}]
         script_parts = self.build_base_script(self.ROOT_SCRIPT, code_blocks, result_workflow)
@@ -90,7 +94,7 @@ class ScriptSplitter:
             else:
                 code_block = code_blocks[which_code_block(node, code_blocks)]
                 if code_block not in self.integrated_blocks:
-                    part = self.gen_method_from_block(code_block)
+                    part = self.gen_part_from_block(code_block)
                     script_parts.append(part)
                     result_workflow.append({"type": "task", "file": part['name']})
                 self.integrated_blocks.append(code_block)
@@ -108,8 +112,11 @@ class ScriptSplitter:
 
         return {'name': iterator_name, 'file': iterator_template}
 
-    def gen_method_from_block(self, code_block):
+    def gen_part_from_block(self, code_block):
         part = {'name': "part_" + ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))}
+
+        # TODO only import the needed packages
+        preamble = self.all_imports[:]
 
         # Compute list of parameters
         parameters = self.compute_parameters(code_block)
@@ -122,7 +129,8 @@ class ScriptSplitter:
         # Generate new method from code block and append to result script
         method_name = "main"
         created_method = create_method(method_name, code_block, parameters, return_variables)
-        part['app.py'] = created_method
+        preamble.extend(created_method)
+        part['app.py'] = preamble
 
         part['requirements.txt'] = self.REQUIREMENTS
 

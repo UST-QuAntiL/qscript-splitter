@@ -124,7 +124,8 @@ def save_as_files(script_parts):
         # Write app.py to disk
         with open(os.path.join(part_directory, "app.py"), "w") as file:
             app.logger.debug("Write app.py to %s" % part_directory)
-            file.write(part['app.py'].dumps())
+            for x in part['app.py']:
+                file.write(x.dumps())
             file.close()
         # Write requirements.txt to disk
         with open(os.path.join(part_directory, "requirements.txt"), "w") as file:
