@@ -129,7 +129,7 @@ class ScriptSplitter:
         # Generate new method from code block and append to result script
         method_name = "main"
         created_method = create_method(method_name, code_block, parameters, return_variables)
-        preamble.extend(created_method)
+        preamble.append(created_method)
         part['app.py'] = preamble
 
         part['requirements.txt'] = self.REQUIREMENTS
