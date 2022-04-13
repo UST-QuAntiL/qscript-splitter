@@ -48,14 +48,10 @@ def poll():
                 variables = externalTask.get('variables')
                 if externalTask.get('topicName') == topic:
                     ### LOAD INPUT DATA ###
-
                     ### CALL SCRIPT PART ###
-
-                    # encode parameters as files due to the string size limitation of camunda
                     ### STORE OUTPUT DATA SECTION ###
 
                     # send response
-                    body = {}
                     response = requests.post(pollingEndpoint + '/' + externalTask.get('id') + '/complete', json=body)
                     print('Status code of response message: ' + str(response.status_code))
 

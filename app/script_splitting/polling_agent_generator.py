@@ -16,12 +16,9 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 # ******************************************************************************
-import json
 import os
 import random
 import string
-
-from redbaron import RedBaron
 
 
 def generate_polling_agent(parameters, return_values):
@@ -36,12 +33,14 @@ def generate_polling_agent(parameters, return_values):
 
     # handle variable retrieval for input data
     load_data_str = ''
+    print('Number of input parameters: %d', len(parameters))
     for inputParameter in parameters:
         load_data_str += '\n'
         load_data_str += '                    if variables.get("' + inputParameter + '").get("type") == "String":\n'
         load_data_str += '                        ' + inputParameter + ' = variables.get("' + inputParameter + '").get("value")\n'
         load_data_str += '                    else:\n'
-        load_data_str += '                        ' + inputParameter + ' = download_data(camundaEndpoint + "/process-instance/" + externalTask.get("processInstanceId") + "/variables/' + inputParameter + '/data")'
+        load_data_str += '                        ' + inputParameter + ' = download_data(camundaEndpoint + "/process-instance/" + externalTask.get("processInstanceId") + "/variables/' + inputParameter + '/data")\n'
+        load_data_str += '                        ' + inputParameter + ' = pickle.loads(base64.b64decode(' + inputParameter + '))\n'
 
     content = content.replace("### LOAD INPUT DATA ###", load_data_str)
 
@@ -68,52 +67,16 @@ def generate_polling_agent(parameters, return_values):
         }
     }
     '''
-    # load RedBaron with current polling agent content
-    pollingAgentBaron = RedBaron(content)
-    print(pollingAgentBaron.help())
-
-    # get the poll method from the template
-    pollDefNode = pollingAgentBaron.find('def', name='poll')
-
-    # get the try catch block in the method
-    tryNode = pollDefNode.value.find('try')
-    ifNode = tryNode.value.find('ifelseblock').value[0].value.find('for').value.find('ifelseblock').find('if')
-
-    # get the position of the output placeholders within the template
-    outputNodeIndex = ifNode.index(ifNode.find('comment', recursive=True, value='### STORE OUTPUT DATA SECTION ###'))
-    outputBodyNode = ifNode.find('assign', target=lambda target: target and (target.value == 'body'))
-
-    outputDict = {"workerId": pollingAgentName, "variables": {}}
+    outputHandler = '\n'
+    outputHandler += '                    body = {"workerId": "' + pollingAgentName + '"}\n'
+    outputHandler += '                    body["variables"] = {}\n'
     for outputParameter in return_values:
         # encode output parameter as file to circumvent the Camunda size restrictions on strings
-        encoding = 'encoded_' + outputParameter + ' = base64.b64encode(str.encode(pickle.dumps(' \
-                   + outputParameter \
-                   + '))).decode("utf-8") '
-        ifNode.insert(outputNodeIndex + 1, encoding)
-
-        # add to final result object send to Camunda
-        outputDict["variables"][outputParameter] = {"value": 'encoded_' + outputParameter, "type": "File",
-                                                    "valueInfo": {
-                                                        "filename": outputParameter + ".txt",
-                                                        "encoding": ""
-                                                    }
-                                                    }
-
-    # remove the quotes added by json.dumps for the variables in the target file
-    outputJson = json.dumps(outputDict)
-    for outputParameter in return_values:
-        outputJson = outputJson.replace('"encoded_' + outputParameter + '"', 'encoded_' + outputParameter)
+        outputHandler += '                    if isinstance(' + outputParameter + ', str):\n'
+        outputHandler += '                        body["variables"]["' + outputParameter + '"] = {"value": ' + outputParameter + ', "type": "String"}\n'
+        outputHandler += '                    else:\n'
+        outputHandler += '                        encoded_' + outputParameter + ' = base64.b64encode(pickle.dumps(' + outputParameter + ')).decode("utf-8")\n'
+        outputHandler += '                        body["variables"]["' + outputParameter + '"] = {"value": "encoded_' + outputParameter + '", "type": "File", "valueInfo": {"filename": "' + outputParameter + '.txt", "encoding": ""}}'
 
     # remove the placeholder
-    ifNode.remove(ifNode[outputNodeIndex])
-
-    # update the result body with the output parameters
-    outputBodyNode.value = outputJson
-
-    # workaround due to RedBaron bug which wrongly idents the exception
-    pollingAgentString = pollingAgentBaron.dumps()
-    pollingAgentString = pollingAgentString.replace("except Exception as err:", "    except Exception as err:")
-    print(pollingAgentString)
-
-    return pollingAgentString
-
+    return content.replace("### STORE OUTPUT DATA SECTION ###", outputHandler)
