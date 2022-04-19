@@ -54,7 +54,7 @@ class ScriptSplitter:
         result_workflow.append({"type": "end"})
 
         for x in result_workflow:
-            print(x)
+            app.logger.debug(x)
 
         return {'extracted_parts': script_parts, 'workflow.json': result_workflow, 'iterators': self.iterators}
 
@@ -208,11 +208,15 @@ class ScriptSplitter:
         return list_of_all_code_blocks
 
     def compute_return_variables(self, code_block):
+        app.logger.debug("Compute return variables for %s" % code_block)
+
         # TODO check recursively
         initialized_variables = []
         for line in code_block:
             if line.type == "assignment":
                 initialized_variables.append(str(line.target.name))
+
+        app.logger.debug("All initialized variables: %s" % initialized_variables)
 
         result = []
         for line in self.ROOT_SCRIPT:
@@ -220,26 +224,35 @@ class ScriptSplitter:
                 if is_used_in_line(variable, line) and str(variable) not in result:
                     result.append(str(variable))
 
+        app.logger.debug("Return variables: %s" % result)
+
         return result
 
     def compute_parameters(self, code_block):
         parameters = []
 
-        # TODO: Bug if a line.value is a simple int or string, recursive call will result in wrong type which is not
-        #  indexable
-        for line in code_block:
-            if line.type == "assignment":
-                if line.value is list:
+        app.logger.debug("Compute parameters for %s" % code_block)
+        try:
+            for line in code_block:
+                app.logger.debug("Scan line for parameters: %s" % line)
+                if line.type == "assignment":
+                    app.logger.debug("Is an assignment... call recursively with right part.")
                     param_list = self.compute_parameters(line.value)
                     for element in param_list:
+                        app.logger.debug("element %s in list %s" % (element, param_list))
                         if element not in parameters:
                             parameters.append(element)
-                continue
-            if line.type in ['comment', 'endl', 'import']:
-                continue
-            for variable in self.all_possible_return_variables:
-                if is_used_in_line(variable, line) and str(variable) not in parameters:
-                    parameters.append(str(variable))
+                    continue
+                if line.type in ['comment', 'endl', 'import']:
+                    continue
+                app.logger.debug("All possible return variables: %s" % self.all_possible_return_variables)
+                for variable in self.all_possible_return_variables:
+                    app.logger.debug("Check if %s is used in line %s. (%s)" % (variable, line, is_used_in_line(variable, line)))
+                    if is_used_in_line(variable, line) and str(variable) not in parameters:
+                        parameters.append(str(variable))
+        except TypeError:
+            app.logger.debug(code_block, 'is not iterable')
+            # TODO: If a line.value is a simple int or string, recursive call will result in wrong type which is not indexable
 
         return parameters
 
