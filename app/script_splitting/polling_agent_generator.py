@@ -72,6 +72,7 @@ def generate_polling_agent(parameters, return_values):
     outputHandler += '                    body["variables"] = {}\n'
     for outputParameter in return_values:
         # encode output parameter as file to circumvent the Camunda size restrictions on strings
+        outputHandler += '\n'
         outputHandler += '                    if isinstance(' + outputParameter + ', str):\n'
         outputHandler += '                        body["variables"]["' + outputParameter + '"] = {"value": ' + outputParameter + ', "type": "String"}\n'
         outputHandler += '                    else:\n'
