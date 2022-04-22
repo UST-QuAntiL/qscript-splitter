@@ -82,10 +82,13 @@ def generate_polling_agent(parameters, return_values):
         outputHandler += '                        print("OutputParameter (string) %s" % ' + outputParameter + ')\n'
         outputHandler += '                        body["variables"]["' + outputParameter + '"] = {"value": ' + outputParameter + ', "type": "String"}\n'
         outputHandler += '                    else:\n'
-        outputHandler += '                        print("Encode OutputParameter %s" % ' + outputParameter + ')\n'
-        outputHandler += '                        encoded_' + outputParameter + ' = base64.b64encode(pickle.dumps(' + outputParameter + ')).decode()\n'
-        outputHandler += '                        print("Encoded: %s" % encoded_' + outputParameter + ')\n'
-        outputHandler += '                        body["variables"]["' + outputParameter + '"] = {"value": encoded_' + outputParameter + ', "type": "File", "valueInfo": {"filename": "' + outputParameter + '", "encoding": "utf-8"}}\n'
+        outputHandler += '                        try:\n'
+        outputHandler += '                            print("Encode OutputParameter %s" % ' + outputParameter + ')\n'
+        outputHandler += '                            encoded_' + outputParameter + ' = base64.b64encode(pickle.dumps(' + outputParameter + ')).decode()\n'
+        outputHandler += '                            print("Encoded: %s" % encoded_' + outputParameter + ')\n'
+        outputHandler += '                            body["variables"]["' + outputParameter + '"] = {"value": encoded_' + outputParameter + ', "type": "File", "valueInfo": {"filename": "' + outputParameter + '", "encoding": "utf-8"}}\n'
+        outputHandler += '                        except Exception as err:\n'
+        outputHandler += '                            print("Could not pickle %s" % err)\n'
         outputHandler += '                    print("body: %s" % body)'
 
     # remove the placeholder
