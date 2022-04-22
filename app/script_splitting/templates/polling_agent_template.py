@@ -21,6 +21,7 @@ import threading
 import base64
 import os
 import pickle
+import codecs
 
 import requests
 from urllib.request import urlopen
@@ -28,7 +29,7 @@ import app
 
 
 def poll():
-    print('Polling for new external tasks at the Camunda engine with URL: ', pollingEndpoint)
+    #print('Polling for new external tasks at the Camunda engine with URL: ', pollingEndpoint)
 
     body = {
         "workerId": "$ServiceNamePlaceholder",
@@ -46,10 +47,19 @@ def poll():
             for externalTask in response.json():
                 print('External task with ID for topic ' + str(externalTask.get('topicName')) + ': ' + str(externalTask.get('id')))
                 variables = externalTask.get('variables')
+                print('Loaded variables: %s' % variables)
                 if externalTask.get('topicName') == topic:
                     ### LOAD INPUT DATA ###
+
+                    print('variables after input load: %s' % variables)
+
                     ### CALL SCRIPT PART ###
+
+                    print('variables after call script: %s' % variables)
+
                     ### STORE OUTPUT DATA SECTION ###
+
+                    print('variables after store output: %s' % variables)
 
                     # send response
                     response = requests.post(pollingEndpoint + '/' + externalTask.get('id') + '/complete', json=body)
@@ -63,7 +73,8 @@ def poll():
 
 def download_data(url):
     response = urlopen(url)
-    data = response.read().decode('utf-8')
+    data = response.read()
+    #.decode('utf-8')
     return str(data)
 
 # start polling for requests
