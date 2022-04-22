@@ -44,8 +44,7 @@ def generate_polling_agent(parameters, return_values):
         load_data_str += '                        print("Input Parameter ' + inputParameter + ' (pickle)")\n'
         load_data_str += '                        ' + inputParameter + ' = download_data(camundaEndpoint + "/process-instance/" + externalTask.get("processInstanceId") + "/variables/' + inputParameter + '/data")\n'
         load_data_str += '                        print("...downloaded value: %s" % ' + inputParameter + ')\n'
-        #load_data_str += '                        ' + inputParameter + ' = pickle.loads(' + inputParameter + ')\n'
-        load_data_str += '                        ' + inputParameter + ' = pickle.loads(codecs.decode(' + inputParameter + '.encode(), "base64"))\n'
+        load_data_str += '                        ' + inputParameter + ' = pickle.loads(' + inputParameter + ')\n'
         load_data_str += '                        print("...decoded value: %s" % ' + inputParameter + ')\n'
 
     content = content.replace("### LOAD INPUT DATA ###", load_data_str)
@@ -84,7 +83,7 @@ def generate_polling_agent(parameters, return_values):
         outputHandler += '                        body["variables"]["' + outputParameter + '"] = {"value": ' + outputParameter + ', "type": "String"}\n'
         outputHandler += '                    else:\n'
         outputHandler += '                        print("Encode OutputParameter %s" % ' + outputParameter + ')\n'
-        outputHandler += '                        encoded_' + outputParameter + ' = str(codecs.encode(codecs.encode(pickle.dumps(' + outputParameter + '), "base64"), "base64"))\n'
+        outputHandler += '                        encoded_' + outputParameter + ' = base64.b64encode(pickle.dumps(' + outputParameter + ')).decode()\n'
         outputHandler += '                        print("Encoded: %s" % encoded_' + outputParameter + ')\n'
         outputHandler += '                        body["variables"]["' + outputParameter + '"] = {"value": encoded_' + outputParameter + ', "type": "File", "valueInfo": {"filename": "' + outputParameter + '", "encoding": "utf-8"}}\n'
         outputHandler += '                    print("body: %s" % body)'

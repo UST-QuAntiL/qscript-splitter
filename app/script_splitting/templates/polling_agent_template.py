@@ -74,8 +74,7 @@ def poll():
 def download_data(url):
     response = urlopen(url)
     data = response.read()
-    #.decode('utf-8')
-    return str(data)
+    return data
 
 # start polling for requests
 camundaEndpoint = os.environ['CAMUNDA_ENDPOINT']
