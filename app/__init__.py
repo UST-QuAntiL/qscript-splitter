@@ -36,3 +36,4 @@ from app import routes, result_model, errors
 app.redis = Redis.from_url(app.config['REDIS_URL'])
 app.queue = rq.Queue('script-splitting-handler', connection=app.redis, default_timeout=3600)
 app.logger.setLevel(logging.DEBUG)
+app.logger.propagate = False
