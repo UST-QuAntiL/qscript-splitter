@@ -133,6 +133,7 @@ class ScriptSplitter:
         # Generate new method from code block and append to result script
         method_name = "main"
         created_method = create_method(method_name, code_block, parameters, return_variables)
+        app.logger.debug("Created method:\n%s" % created_method.dumps())
         preamble.append(created_method)
         part['app.py'] = preamble
 
@@ -255,7 +256,7 @@ class ScriptSplitter:
                     if is_used_in_line(variable, line) and str(variable) not in parameters:
                         parameters.append(str(variable))
         except TypeError:
-            app.logger.debug(code_block, 'is not iterable')
+            app.logger.debug("code_block is not iterable")
             # TODO: If a line.value is a simple int or string, recursive call will result in wrong type which is not indexable
 
         return parameters
@@ -277,7 +278,10 @@ def create_method(method_name, code_block, parameters, return_variables):
     method.pop(0)
 
     for node in code_block:
-        indent(node)
+        try:
+            node.increase_indentation(4)
+        except AttributeError:
+            pass
         method.append(node)
 
     # Add return statement
@@ -286,16 +290,6 @@ def create_method(method_name, code_block, parameters, return_variables):
         method.append(RedBaron("return " + ", ".join(return_variables)))
 
     return method
-
-
-def indent(node):
-    try:
-        node.increase_indentation(4)
-    except AttributeError:
-        pass
-    if node.type in ['ifelseblock', 'if', 'elif', 'else', 'while', 'for']:
-        for block in node.value:
-            indent(block)
 
 
 def which_code_block(node, code_blocks):
