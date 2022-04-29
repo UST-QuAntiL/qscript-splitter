@@ -44,6 +44,10 @@ class ScriptSplitter:
         self.SPLITTING_LABELS = splitting_labels
 
     def split_script(self):
+        print("Start splitting script with following labels:")
+        for key, value in self.SPLITTING_LABELS.items():
+            print("LABEL: %s - %s" % (value, repr(key.dumps())))
+
         code_blocks = self.identify_code_blocks(self.ROOT_SCRIPT)
         for line in self.ROOT_SCRIPT:
             if self.SPLITTING_LABELS[line] == Labels.IMPORTS:
@@ -247,7 +251,7 @@ class ScriptSplitter:
                     continue
                 app.logger.debug("All possible return variables: %s" % self.all_possible_return_variables)
                 for variable in self.all_possible_return_variables:
-                    app.logger.debug("Check if %s is used in line %s. (%s)" % (variable, line, is_used_in_line(variable, line)))
+                    app.logger.debug("Check if %s is used in line %s. (%s)" % (variable, repr(line), is_used_in_line(variable, line)))
                     if is_used_in_line(variable, line) and str(variable) not in parameters:
                         parameters.append(str(variable))
         except TypeError:

@@ -164,8 +164,10 @@ def zip_directory(directory_path, zip_file):
 
 if __name__ == '__main__':
     basedir = os.path.join(os.path.abspath(os.path.dirname(__file__)), "..", "data")
-    script_path = os.path.join(basedir, "files", "example.py")
+    script_path = os.path.join(basedir, "files", "Shor/Shor_sim15.py")
     rq_path = os.path.join(basedir, "files", "requirements.txt")
     kb_path = os.path.join(basedir, "knowledge_base", "knowledge_base.json")
+
+    print("Loaded files:\nScript=%s\nRequirements=%s\nKnowledge_Base=%s" % (script_path, rq_path, kb_path))
 
     result = do_the_split(RedBaron(open(script_path, "r").read()), open(rq_path, "r").read(), json.load(open(kb_path, "r")))

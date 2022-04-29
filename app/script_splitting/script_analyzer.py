@@ -27,6 +27,7 @@ class ScriptAnalyzer:
     ROOT_SCRIPT = None
     WHITE_LIST = None
     BLACK_LIST = None
+    QUANTUM_OBJECTS = []
 
     def __init__(self, script, white_list, black_list):
         self.ROOT_SCRIPT = script
@@ -34,8 +35,6 @@ class ScriptAnalyzer:
         self.BLACK_LIST = black_list
 
     def get_labels(self):
-        script = self.ROOT_SCRIPT[:]
-
         # Get Initial labels
         labels = self.get_initial_labels(self.ROOT_SCRIPT)
         app.logger.debug("Initial Labels: %s" % labels)
@@ -63,9 +62,7 @@ class ScriptAnalyzer:
 
         return labels
 
-    def get_initial_labels(self, script, quantum_objects=None):
-        if quantum_objects is None:
-            quantum_objects = []
+    def get_initial_labels(self, script):
         labels = {}
 
         for baron_node in script:
@@ -110,7 +107,7 @@ class ScriptAnalyzer:
                 labels.update(sub_labels)
 
             # Handle basic classical instructions
-            elif baron_node.type in ['print', 'tuple', 'int', 'list']:
+            elif baron_node.type in ['print', 'tuple', 'int', 'list', 'del']:
                 app.logger.info('Basic Type. --> CLASSICAL!')
                 labels[baron_node] = Labels.CLASSICAL
 
@@ -118,33 +115,36 @@ class ScriptAnalyzer:
             elif baron_node.type == 'assignment':
                 if baron_node.value.type != 'atomtrailers':
                     app.logger.error('Unexpected node type received: %s' % baron_node.value.type)
-                label = self.handle_atomic_trailer_nodes(baron_node.value, quantum_objects)
+                label = self.handle_atomic_trailer_nodes(baron_node.value)
                 labels[baron_node] = label
                 if label == Labels.QUANTUM:
                     app.logger.debug(
                         '"%s" is QUANTUM, thus, "%s" is QUANTUM as well.' % (baron_node.value, baron_node.target.value))
-                    quantum_objects.append(baron_node.target.value)
+                    self.QUANTUM_OBJECTS.append(baron_node.target.value)
 
             # Handle atomtrailers
             elif baron_node.type == 'atomtrailers':
-                label = self.handle_atomic_trailer_nodes(baron_node, quantum_objects)
+                label = self.handle_atomic_trailer_nodes(baron_node)
                 labels[baron_node] = label
 
             else:
                 app.logger.error('Unexpected node type received: %s' % baron_node.type)
-                labels[baron_node] = Labels.NO_CODE
+                labels[baron_node] = Labels.CLASSICAL
 
         return labels
 
-    def handle_atomic_trailer_nodes(self, atom_trailers_node, quantum_objects):
+    def handle_atomic_trailer_nodes(self, atom_trailers_node):
         # Retrieve identifier on the left to check if it is quantum-specific
-        left_most_identifier = atom_trailers_node.value[0]
+        try:
+            left_most_identifier = atom_trailers_node.value[0]
+        except IndexError:
+            return Labels.CLASSICAL
         app.logger.debug('Object on the left side of the atomtrailer node: %s' % left_most_identifier)
 
         # Check if identifier is contained in the list with assigned quantum objects
         app.logger.debug('Check if %s is contained in %s: %s' % (
-            str(atom_trailers_node.value[0]), quantum_objects, str(atom_trailers_node.value[0]) in quantum_objects))
-        if str(atom_trailers_node.value[0]) in quantum_objects:
+            str(atom_trailers_node.value[0]), self.QUANTUM_OBJECTS, str(atom_trailers_node.value[0]) in self.QUANTUM_OBJECTS))
+        if str(atom_trailers_node.value[0]) in self.QUANTUM_OBJECTS:
             app.logger.debug('Object already assigned as QUANTUM object!')
             return Labels.QUANTUM
         else:
@@ -226,10 +226,60 @@ def is_in_knowledge_base(package_orig, knowledge_base):
     return False
 
 
-def relabel_code_blocks_if_not_hybrid(script, splitting_labels, parent=None):
+def relabel_code_blocks_if_not_hybrid(script, splitting_labels):
     found_quantum = False
     found_classical = False
+    found_hybrid = False
+
     for node in script:
+        if node not in splitting_labels:
+            continue
+
+        # Handle ifs recursively
+        if splitting_labels[node] == Labels.IF_ELSE_BLOCK:
+            labels = []
+            for block in node.value:
+                label = relabel_code_blocks_if_not_hybrid(block, splitting_labels)
+                labels.append(label)
+            if "hybrid" not in labels:
+                if Labels.QUANTUM not in labels:
+                    splitting_labels[node] = Labels.CLASSICAL
+                elif Labels.CLASSICAL not in labels:
+                    splitting_labels[node] = Labels.QUANTUM
+
+        # Handle loops recursively
+        elif splitting_labels[node] == Labels.LOOP:
+            label = relabel_code_blocks_if_not_hybrid(node.value, splitting_labels)
+            if label == Labels.QUANTUM:
+                splitting_labels[node] = Labels.QUANTUM
+            elif label == Labels.CLASSICAL:
+                splitting_labels[node] = Labels.CLASSICAL
+
+        # If any one node in the list is Quantum/Classical, set found_quantum/found_classical to true
+        if splitting_labels[node] == Labels.QUANTUM:
+            found_quantum = True
+        elif splitting_labels[node] == Labels.CLASSICAL:
+            found_classical = True
+        elif splitting_labels[node] in [Labels.IF_ELSE_BLOCK, Labels.LOOP]:
+            found_hybrid = True
+
+    if found_hybrid:
+        return "hybrid"
+    if found_quantum and not found_classical:
+        return Labels.QUANTUM
+    if found_classical and not found_quantum:
+        return Labels.CLASSICAL
+    return "hybrid"
+
+
+
+def relabel_code_blocks_if_not_hybrid_old(script, splitting_labels, parent=None):
+    found_quantum = False
+    found_classical = False
+    found_hybrid = False
+    for node in script:
+        if node not in splitting_labels:
+            continue
         # Handle ifs recursively
         if splitting_labels[node] == Labels.IF_ELSE_BLOCK:
             for block in node.value:
@@ -239,10 +289,15 @@ def relabel_code_blocks_if_not_hybrid(script, splitting_labels, parent=None):
             relabel_code_blocks_if_not_hybrid(node.value, splitting_labels, node)
 
         # If any one node in the list is Quantum/Classical, set found_quantum/found_classical to true
-        if not found_quantum and node in splitting_labels and splitting_labels[node] == Labels.QUANTUM:
+        if splitting_labels[node] == Labels.QUANTUM:
             found_quantum = True
-        elif not found_classical and node in splitting_labels and splitting_labels[node] == Labels.CLASSICAL:
+        elif splitting_labels[node] == Labels.CLASSICAL:
             found_classical = True
+        elif splitting_labels[node] in [Labels.IF_ELSE_BLOCK, Labels.LOOP]:
+            found_hybrid = True
+
+    if found_hybrid or (found_quantum and found_classical):
+        return
 
     # False for the first iteration where parent is root
     if parent is not None and parent in splitting_labels:
@@ -264,6 +319,9 @@ def apply_threshold(script, splitting_labels):
     classical_nodes = []
     any_quantum = False
     for node in script:
+        if node not in splitting_labels:
+            continue
+
         # Handle if-else-blocks recursively. Do not relabel preceding classical.
         if splitting_labels[node] == Labels.IF_ELSE_BLOCK:
             for block in node.value:
