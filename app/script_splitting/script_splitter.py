@@ -21,7 +21,7 @@ import random
 import string
 import os
 
-from redbaron import RedBaron
+from redbaron import RedBaron, NodeList
 
 from app import app
 from app.script_splitting.Labels import Labels
@@ -36,7 +36,7 @@ class ScriptSplitter:
     integrated_blocks = []
     all_possible_return_variables = []
     iterators = []
-    all_imports =[]
+    all_imports = []
 
     def __init__(self, script, requirements, splitting_labels):
         self.ROOT_SCRIPT = script
@@ -212,22 +212,51 @@ class ScriptSplitter:
 
         return list_of_all_code_blocks
 
-    def compute_return_variables(self, code_block):
-        app.logger.debug("Compute return variables for %s" % code_block)
+    def get_assigned_variables(self, result, code_block):
+        for line in code_block:
+            if line.type == "assignment":
+                if line.target.name not in result:
+                    result.append(str(line.target.name))
+            if line.type == "ifelseblock":
+                for block in line.value:
+                    self.get_assigned_variables(result, block.value)
+            if line.type in ['while', 'for']:
+                self.get_assigned_variables(result, line.value)
 
-        # TODO check recursively
+    def find_used_variables_in_other_code_blocks(self, line, code_block, assignment_nodes, result):
+        if line in code_block:
+            return
+        if line.type == "ifelseblock":
+            for block in line.value:
+                for x in block.value:
+                    self.find_used_variables_in_other_code_blocks(x, code_block, assignment_nodes, result)
+        elif line.type in ['while', 'for']:
+            for x in line.value:
+                self.find_used_variables_in_other_code_blocks(x, code_block, assignment_nodes, result)
+        else:
+            for variable in assignment_nodes:
+                if str(variable) in result:
+                    continue
+                if is_used_in_line(variable, line):
+                    result.append(str(variable))
+
+    def compute_return_variables(self, code_block):
+        app.logger.debug("Compute return variables")
+
         initialized_variables = []
         for line in code_block:
             if line.type == "assignment":
                 initialized_variables.append(str(line.target.name))
 
-        app.logger.debug("All initialized variables: %s" % initialized_variables)
+        assignment_nodes = []
+        self.get_assigned_variables(assignment_nodes, code_block)
+        assignment_nodes = list(dict.fromkeys(assignment_nodes))
+
+        app.logger.debug("All initialized variables: %s" % assignment_nodes)
 
         result = []
         for line in self.ROOT_SCRIPT:
-            for variable in initialized_variables:
-                if is_used_in_line(variable, line) and str(variable) not in result:
-                    result.append(str(variable))
+            self.find_used_variables_in_other_code_blocks(line, code_block, assignment_nodes, result)
 
         app.logger.debug("Return variables: %s" % result)
 
@@ -252,8 +281,10 @@ class ScriptSplitter:
                     continue
                 app.logger.debug("All possible return variables: %s" % self.all_possible_return_variables)
                 for variable in self.all_possible_return_variables:
+                    if str(variable) in parameters:
+                        continue
                     app.logger.debug("Check if %s is used in line %s. (%s)" % (variable, repr(line), is_used_in_line(variable, line)))
-                    if is_used_in_line(variable, line) and str(variable) not in parameters:
+                    if is_used_in_line(variable, line):
                         parameters.append(str(variable))
         except TypeError:
             app.logger.debug("code_block is not iterable")
@@ -264,8 +295,6 @@ class ScriptSplitter:
 
 def is_used_in_line(variable, line):
     found = line.find_all("NameNode", value=variable)
-    # TODO: NameNode includes function calls as well, thus, only search for variables.
-    #  The current implementation, however, might return unnecessary variables as well.
     return len(found) > 0
 
 

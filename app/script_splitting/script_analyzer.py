@@ -37,10 +37,10 @@ class ScriptAnalyzer:
     def get_labels(self):
         # Get Initial labels
         labels = self.get_initial_labels(self.ROOT_SCRIPT)
-        app.logger.debug("Initial Labels: %s" % labels)
+        app.logger.debug("Initial Labels:")
 
         for key, value in labels.items():
-            print("LABEL: %s - %s" % (value, repr(key.dumps())))
+            app.logger.debug("LABEL: %s - %s" % (value, repr(key.dumps())))
 
         # If code blocks (ifs, whiles, etc.) are not hybrid, their explicit label is changed to QUANTUM/CLASSICAL
         dirty = True

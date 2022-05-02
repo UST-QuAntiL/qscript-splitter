@@ -168,6 +168,5 @@ if __name__ == '__main__':
     rq_path = os.path.join(basedir, "files", "requirements.txt")
     kb_path = os.path.join(basedir, "knowledge_base", "knowledge_base.json")
 
-    print("Loaded files:\nScript=%s\nRequirements=%s\nKnowledge_Base=%s" % (script_path, rq_path, kb_path))
-
-    result = do_the_split(RedBaron(open(script_path, "r").read()), open(rq_path, "r").read(), json.load(open(kb_path, "r")))
+    rb = RedBaron(open(script_path, "r").read())
+    result = do_the_split(rb, open(rq_path, "r").read(), json.load(open(kb_path, "r")))
