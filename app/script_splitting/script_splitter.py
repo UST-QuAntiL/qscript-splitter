@@ -307,10 +307,6 @@ def create_method(method_name, code_block, parameters, return_variables):
     method.pop(0)
 
     for node in code_block:
-        try:
-            node.increase_indentation(4)
-        except AttributeError:
-            pass
         method.append(node)
 
     # Add return statement

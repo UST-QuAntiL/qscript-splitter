@@ -16,17 +16,19 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 # ******************************************************************************
+import autoflake
+import sys
+import json
+import os
+import zipfile
+import urllib.request
+import shutil
 
 from app import app
 from redbaron import RedBaron
 from app.script_splitting.flattener import flatten
 from app.script_splitting.script_analyzer import ScriptAnalyzer
 from app.script_splitting.script_splitter import ScriptSplitter
-import json
-import os
-import zipfile
-import urllib.request
-import shutil
 from rq import get_current_job
 
 
@@ -90,7 +92,13 @@ def split_qc_script(script_url, requirements_url, knowledge_base_url):
 
 
 def save_as_files(script_parts):
-    job_id = get_current_job().get_id()
+    if __name__ == '__main__':
+        job_id = "__main__"
+        if os.path.exists(os.path.join(app.config["RESULT_FOLDER"], job_id)):
+            app.logger.debug('Delete upload folder %s' % app.config['RESULT_FOLDER'])
+            shutil.rmtree(app.config['RESULT_FOLDER'])
+    else:
+        job_id = get_current_job().get_id()
 
     # Create result directory if not existing
     directory = os.path.join(app.config["RESULT_FOLDER"], job_id)
@@ -126,9 +134,14 @@ def save_as_files(script_parts):
             app.logger.debug("Create app.py in %s" % part_directory)
             for x in part['app.py']:
                 app.logger.debug("Write %s to app.py" % x.dumps())
-                file.write(x.dumps())
+                a = x.dumps()
+                b = a
+                file.write(b)
                 file.write("\n")
             file.close()
+        # Remove unused imports using autoflake
+        args = lambda: None; args.ignore_init_module_imports = False; args.imports = ""; args.expand_star_imports = False; args.remove_all_unused_imports = True; args.remove_duplicate_keys = False; args.remove_unused_variables = False; args.check = False; args.in_place = True
+        autoflake.fix_file(os.path.join(part_directory, "app.py"), args=args, standard_out=sys.stdout)
         # Write requirements.txt to disk
         with open(os.path.join(part_directory, "requirements.txt"), "w") as file:
             app.logger.debug("Write requirements.txt to %s" % part_directory)
@@ -159,14 +172,16 @@ def zip_directory(directory_path, zip_file):
         for file in files:
             zip_file.write(os.path.join(root, file),
                            os.path.relpath(os.path.join(root, file),
-                           os.path.join(directory_path, '..')))
+                                           os.path.join(directory_path, '..')))
 
 
 if __name__ == '__main__':
     basedir = os.path.join(os.path.abspath(os.path.dirname(__file__)), "..", "data")
-    script_path = os.path.join(basedir, "files", "Shor/Shor_sim15.py")
+    script_path = os.path.join(basedir, "files", "Shor", "Shor_sim15.py")
     rq_path = os.path.join(basedir, "files", "requirements.txt")
     kb_path = os.path.join(basedir, "knowledge_base", "knowledge_base.json")
 
     rb = RedBaron(open(script_path, "r").read())
     result = do_the_split(rb, open(rq_path, "r").read(), json.load(open(kb_path, "r")))
+    path = save_as_files(result)
+    app.logger.info("Stored result to %s" % path)

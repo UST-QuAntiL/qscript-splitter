@@ -16,6 +16,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 # ******************************************************************************
+from app import app
 import os
 import random
 import string
@@ -33,7 +34,7 @@ def generate_polling_agent(parameters, return_values):
 
     # handle variable retrieval for input data
     load_data_str = ''
-    print('Number of input parameters: %d', len(parameters))
+    app.logger.debug('Number of input parameters: %d' % len(parameters))
     for inputParameter in parameters:
         load_data_str += '\n'
         load_data_str += '                    if variables.get("' + inputParameter + '").get("type") in ["string", "long", "double", "boolean"]:\n'
