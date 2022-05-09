@@ -1,6 +1,6 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-# qiskit-runtime-handler
+# qscript splitter
 
 This service takes a workflow fragment realizing a hybrid algorithm as input and generates a [Qiskit Runtime](https://quantum-computing.ibm.com/lab/docs/iql/runtime/) program to benefit from speedups and reduced queuing times.
 Additionally, an agent is generated which handles the transfer of input/output parameters between the Qiskit Runtime program and a workflow.
