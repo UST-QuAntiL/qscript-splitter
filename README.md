@@ -1,6 +1,6 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-# qscript splitter
+# qscript-splitter
 
 This service takes a Python-based quantum implementation (i.e., a Python file and a requirements.txt file) as input and splits it into its quantum and classical parts.
 It further generates a workflow.
