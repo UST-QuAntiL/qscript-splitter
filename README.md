@@ -1,19 +1,19 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-# qscript splitter
+# qscript-splitter
 
-This service takes a workflow fragment realizing a hybrid algorithm as input and generates a [Qiskit Runtime](https://quantum-computing.ibm.com/lab/docs/iql/runtime/) program to benefit from speedups and reduced queuing times.
-Additionally, an agent is generated which handles the transfer of input/output parameters between the Qiskit Runtime program and a workflow.
+This service takes a Python-based quantum implementation (i.e., a Python file and a requirements.txt file) as input and splits it into its quantum and classical parts.
+It further generates a workflow.
+Additionally, an agent is generated which handles the transfer of input/output parameters between the script parts and the workflow.
 
-The qiskit-runtime-handler can be used in conjunction with the [QuantME Transformation Framework](https://github.com/UST-QuAntiL/QuantME-TransformationFramework).
-Please have a look at the corresponding [documentation](https://github.com/UST-QuAntiL/QuantME-TransformationFramework/tree/develop/docs/quantme/Analysis-and-Rewrite).
-Furthermore, a use case showing the analysis and rewrite of quantum workflows using the qiskit-runtime-handler is available [here](https://github.com/UST-QuAntiL/QuantME-UseCases/tree/master/2022-closer).
+The qscript-splitter can be used in conjunction with the [QuantME Transformation Framework](https://github.com/UST-QuAntiL/QuantME-TransformationFramework).
+Furthermore, a use case showing the analysis and rewrite of quantum workflows using the qiskit-runtime-handler is available [here](https://github.com/UST-QuAntiL/QuantME-UseCases/tree/master/2022-edoc).
 
 ## Docker Setup
 
 * Clone the repository:
 ```
-git clone https://github.com/UST-QuAntiL/qiskit-runtime-handler.git
+git clone https://github.com/UST-QuAntiL/qscript-splitter.git
 ```
 
 * Start the containers using the [docker-compose file](docker-compose.yml):
@@ -22,7 +22,7 @@ docker-compose pull
 docker-compose up
 ```
 
-Now the qiskit-runtime-handler is available on http://localhost:8889/.
+Now the qscript-splitter is available on http://localhost:8889/.
 
 ## Local Setup
 
@@ -34,9 +34,9 @@ Start Redis, e.g., using Docker:
 docker run -p 5040:5040 redis --port 5040
 ```
 
-### Configure the Qiskit Runtime Handler
+### Configure the qscript-splitter
 
-Before starting the Qiskit Runtime handler, define the following environment variables:
+Before starting the qscript-splitter, define the following environment variables:
 
 ```
 FLASK_RUN_PORT=8889
@@ -61,7 +61,7 @@ flask db upgrade
 Start a worker for the request queue:
 
 ```
-rq worker --url redis://$DOCKER_ENGINE_IP:5040 qiskit-runtime-handler
+rq worker --url redis://$DOCKER_ENGINE_IP:5040 script-splitting-handler
 ```
 
 Finally, start the Flask application, e.g., using PyCharm or the command line.
