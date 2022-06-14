@@ -37,7 +37,7 @@ def generate_polling_agent(parameters, return_values):
     app.logger.debug('Number of input parameters: %d' % len(parameters))
     for inputParameter in parameters:
         load_data_str += '\n'
-        load_data_str += '                    if variables.get("' + inputParameter + '").get("type") in ["string", "long", "double", "boolean"]:\n'
+        load_data_str += '                    if variables.get("' + inputParameter + '").get("type").casefold() in ["string", "long", "double", "boolean"]:\n'
         load_data_str += '                        print("Input Parameter ' + inputParameter + ' (basic type)")\n'
         load_data_str += '                        ' + inputParameter + ' = variables.get("' + inputParameter + '").get("value")\n'
         load_data_str += '                        print("...value: %s" % ' + inputParameter + ')\n'
